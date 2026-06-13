@@ -133,6 +133,41 @@ function useGlia(options) {
   }, [connect]);
   return { send, cancel, isConnected, isStreaming, messages, streamContent, reconnect };
 }
+var defaultColors = {
+  bg: "var(--glia-bg, transparent)",
+  text: "var(--glia-text, var(--zea-bc, #e6edf3))",
+  textMuted: "var(--glia-text-muted, color-mix(in oklch, var(--zea-bc, #e6edf3) 50%, transparent))",
+  userBubble: "var(--glia-user-bubble, var(--zea-p, #16a34a))",
+  userBubbleText: "var(--glia-user-text, var(--zea-pc, #fff))",
+  agentBubble: "var(--glia-agent-bubble, var(--zea-b1, #2a3040))",
+  agentBubbleText: "var(--glia-agent-text, var(--zea-bc, #e6edf3))",
+  thinkingBg: "var(--glia-thinking-bg, color-mix(in oklch, #7c3aed 8%, transparent))",
+  thinkingText: "var(--glia-thinking-text, oklch(70% 0.2 292))",
+  thinkingBorder: "var(--glia-thinking-border, color-mix(in oklch, #7c3aed 20%, transparent))",
+  toolBg: "var(--glia-tool-bg, color-mix(in oklch, #7c3aed 10%, transparent))",
+  toolText: "var(--glia-tool-text, oklch(65% 0.2 292))",
+  toolBorder: "var(--glia-tool-border, color-mix(in oklch, #7c3aed 20%, transparent))",
+  resultBg: "var(--glia-result-bg, color-mix(in oklch, var(--zea-su, #10b981) 10%, transparent))",
+  resultText: "var(--glia-result-text, oklch(60% 0.14 180))",
+  resultBorder: "var(--glia-result-border, color-mix(in oklch, var(--zea-su, #10b981) 25%, transparent))",
+  inputBg: "var(--glia-input-bg, var(--zea-b2, #1e2432))",
+  inputBorder: "var(--glia-input-border, var(--zea-b2, #1e2432))",
+  primary: "var(--glia-primary, var(--zea-p, #16a34a))",
+  primaryText: "var(--glia-primary-text, var(--zea-pc, #fff))",
+  font: "var(--glia-font, var(--zea-sans, system-ui, sans-serif))",
+  radius: "var(--glia-radius, 12px)"
+};
+function pushBlock(blocks, b) {
+  const last = blocks[blocks.length - 1];
+  if (b.type === "thinking_delta" && last?.type === "thinking_delta")
+    return [...blocks.slice(0, -1), { type: "thinking_delta", text: last.text + b.text }];
+  if (b.type === "text_delta" && last?.type === "text_delta")
+    return [...blocks.slice(0, -1), { type: "text_delta", text: last.text + b.text }];
+  return [...blocks, b];
+}
+function renderMarkdown(text) {
+  return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*(.+?)\*/g, "<em>$1</em>").replace(/`([^`]+)`/g, '<code class="glia-code">$1</code>').replace(/\n/g, "<br/>");
+}
 function GliaChat({
   agentId,
   conversationId,
@@ -140,90 +175,228 @@ function GliaChat({
   baseUrl,
   placeholder = "Mensaje para el agente...",
   welcomeMessage = "\xA1Hola! Soy tu agente. \xBFEn qu\xE9 puedo ayudarte?",
-  suggestions = [],
-  className = ""
+  className = "",
+  colors: colorsOverride,
+  renderMessage,
+  renderInput
 }) {
-  const { send, cancel, isStreaming, messages, streamContent } = useGlia({
+  const c = { ...defaultColors, ...colorsOverride };
+  const css = (o) => o;
+  const [streamBlocks, setStreamBlocks] = react.useState([]);
+  const [thinkingOpen, setThinkingOpen] = react.useState(true);
+  const streamRef = react.useRef([]);
+  const { send, cancel, isStreaming, messages } = useGlia({
     agentId,
     conversationId,
     apiKey,
-    baseUrl
+    baseUrl,
+    onDelta: react.useCallback((text) => {
+      streamRef.current = pushBlock(streamRef.current, { type: "text_delta", text });
+      setStreamBlocks([...streamRef.current]);
+    }, []),
+    onThinking: react.useCallback((text) => {
+      streamRef.current = pushBlock(streamRef.current, { type: "thinking_delta", text });
+      setStreamBlocks([...streamRef.current]);
+    }, []),
+    onTool: react.useCallback((name, input2) => {
+      streamRef.current = pushBlock(streamRef.current, { type: "tool_call", name, input: input2 });
+      setStreamBlocks([...streamRef.current]);
+    }, []),
+    onDone: react.useCallback(() => {
+      streamRef.current = [];
+      setStreamBlocks([]);
+    }, []),
+    onCancelled: react.useCallback(() => {
+      streamRef.current = [];
+      setStreamBlocks([]);
+    }, [])
   });
   const [input, setInput] = react.useState("");
   const [cancelling, setCancelling] = react.useState(false);
   const feedRef = react.useRef(null);
   react.useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, streamContent]);
+  }, [messages, streamBlocks]);
+  react.useEffect(() => {
+    if (!isStreaming) setCancelling(false);
+  }, [isStreaming]);
   const handleSend = () => {
-    const text = input.trim();
-    if (!text || isStreaming) return;
-    send(text);
-    setInput("");
+    const t = input.trim();
+    if (t && !isStreaming) {
+      send(t);
+      setInput("");
+    }
   };
   const handleCancel = () => {
     setCancelling(true);
     cancel();
   };
-  react.useEffect(() => {
-    if (!isStreaming) setCancelling(false);
-  }, [isStreaming]);
-  return /* @__PURE__ */ jsxRuntime.jsxs("div", { className: `flex flex-col h-full ${className}`, children: [
-    /* @__PURE__ */ jsxRuntime.jsxs("div", { ref: feedRef, className: "flex-1 overflow-y-auto p-4 space-y-4", children: [
-      messages.length === 0 && /* @__PURE__ */ jsxRuntime.jsx("p", { className: "text-center text-sm text-gray-400 mt-[40%]", children: welcomeMessage }),
-      messages.map((msg) => /* @__PURE__ */ jsxRuntime.jsx("div", { className: `flex ${msg.role === "user" ? "justify-end" : "justify-start"}`, children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: `max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm"}`, children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "whitespace-pre-wrap", children: msg.content }) }) }, msg.id)),
-      isStreaming && streamContent && /* @__PURE__ */ jsxRuntime.jsx("div", { className: "flex justify-start", children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm bg-gray-100", children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "whitespace-pre-wrap", children: streamContent }) }) }),
-      isStreaming && !streamContent && /* @__PURE__ */ jsxRuntime.jsx("div", { className: "flex justify-start", children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "px-4 py-2.5 text-sm text-gray-400", children: "Pensando..." }) })
-    ] }),
-    /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "border-t p-3", children: [
-      suggestions.length > 0 && !isStreaming && /* @__PURE__ */ jsxRuntime.jsx("div", { className: "flex gap-2 mb-2 overflow-x-auto pb-1", children: suggestions.map((s, i) => /* @__PURE__ */ jsxRuntime.jsx(
-        "button",
-        {
-          onClick: () => setInput(s.label),
-          className: "shrink-0 px-3 py-1 rounded-full text-xs border hover:bg-gray-50",
-          children: s.label
+  const defaultMessage = (msg) => /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-msg", style: css({ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }), children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-bubble", style: css({
+    maxWidth: "85%",
+    padding: "10px 14px",
+    borderRadius: c.radius,
+    fontSize: 13,
+    lineHeight: 1.55,
+    background: msg.role === "user" ? c.userBubble : c.agentBubble,
+    color: msg.role === "user" ? c.userBubbleText : c.agentBubbleText,
+    borderBottomRightRadius: msg.role === "user" ? "4px" : c.radius,
+    borderBottomLeftRadius: msg.role !== "user" ? "4px" : c.radius
+  }), children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-md", dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) } }) }) }, msg.id);
+  const defaultInput = /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-input-area", style: css({ padding: "12px 16px", borderTop: `1px solid ${c.inputBorder}`, flexShrink: 0 }), children: /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-input-row", style: css({
+    display: "flex",
+    alignItems: "flex-end",
+    gap: 8,
+    background: c.inputBg,
+    border: `1px solid ${c.inputBorder}`,
+    borderRadius: c.radius,
+    padding: "8px 12px"
+  }), children: [
+    /* @__PURE__ */ jsxRuntime.jsx(
+      "textarea",
+      {
+        value: input,
+        onChange: (e) => setInput(e.target.value),
+        onKeyDown: (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+          }
         },
-        i
-      )) }),
-      /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "flex items-end gap-2 border rounded-xl p-2 bg-gray-50", children: [
-        /* @__PURE__ */ jsxRuntime.jsx(
-          "textarea",
-          {
-            value: input,
-            onChange: (e) => setInput(e.target.value),
-            onKeyDown: (e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            },
-            placeholder: isStreaming ? "El agente est\xE1 respondiendo..." : placeholder,
-            rows: 2,
-            disabled: isStreaming,
-            className: "flex-1 resize-none border-none bg-transparent outline-none text-sm p-1",
-            style: { opacity: isStreaming ? 0.5 : 1 }
-          }
-        ),
-        isStreaming ? /* @__PURE__ */ jsxRuntime.jsx(
-          "button",
-          {
-            onClick: handleCancel,
-            disabled: cancelling,
-            className: "w-8 h-8 rounded-full flex items-center justify-center bg-blue-600 text-white text-lg",
-            title: "Detener",
-            children: cancelling ? "\u23F3" : "\u25A0"
-          }
-        ) : /* @__PURE__ */ jsxRuntime.jsx(
-          "button",
-          {
-            onClick: handleSend,
-            className: "w-8 h-8 rounded-full flex items-center justify-center bg-blue-600 text-white",
-            style: { opacity: input.trim() ? 1 : 0.4 },
-            children: "\u2191"
-          }
-        )
+        placeholder: isStreaming ? "El agente est\xE1 respondiendo..." : placeholder,
+        rows: 2,
+        disabled: isStreaming,
+        className: "glia-textarea",
+        style: css({
+          flex: 1,
+          resize: "none",
+          border: "none",
+          outline: "none",
+          background: "transparent",
+          color: c.text,
+          fontSize: 13,
+          fontFamily: c.font,
+          opacity: isStreaming ? 0.5 : 1
+        })
+      }
+    ),
+    isStreaming ? /* @__PURE__ */ jsxRuntime.jsx("button", { onClick: handleCancel, disabled: cancelling, className: "glia-btn-cancel", style: css({
+      width: 32,
+      height: 32,
+      borderRadius: "50%",
+      border: "none",
+      background: cancelling ? c.inputBorder : c.primary,
+      color: cancelling ? c.textMuted : c.primaryText,
+      cursor: cancelling ? "default" : "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 14,
+      flexShrink: 0
+    }), children: cancelling ? "\u23F3" : "\u25A0" }) : /* @__PURE__ */ jsxRuntime.jsx("button", { onClick: handleSend, className: "glia-btn-send", style: css({
+      width: 32,
+      height: 32,
+      borderRadius: "50%",
+      border: "none",
+      background: input.trim() ? c.primary : c.inputBorder,
+      color: c.primaryText,
+      cursor: input.trim() ? "pointer" : "default",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 16,
+      flexShrink: 0,
+      opacity: input.trim() ? 1 : 0.4
+    }), children: "\u2191" })
+  ] }) });
+  return /* @__PURE__ */ jsxRuntime.jsxs("div", { className: `glia-root ${className}`, style: css({ display: "flex", flexDirection: "column", height: "100%", background: c.bg, fontFamily: c.font }), children: [
+    /* @__PURE__ */ jsxRuntime.jsxs("div", { ref: feedRef, className: "glia-feed", style: css({ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 12 }), children: [
+      messages.length === 0 && !isStreaming && /* @__PURE__ */ jsxRuntime.jsx("p", { className: "glia-welcome", style: css({ textAlign: "center", fontSize: 13, color: c.textMuted, marginTop: "40%" }), children: welcomeMessage }),
+      messages.map((msg) => renderMessage ? renderMessage(msg, defaultMessage(msg)) : defaultMessage(msg)),
+      streamBlocks.length > 0 && /* @__PURE__ */ jsxRuntime.jsx(StreamingView, { blocks: streamBlocks, colors: c, thinkingOpen, onToggleThinking: () => setThinkingOpen((o) => !o) }),
+      isStreaming && streamBlocks.length === 0 && /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-thinking-indicator", style: css({ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }), children: [
+        /* @__PURE__ */ jsxRuntime.jsx("div", { style: css({ width: 6, height: 6, borderRadius: "50%", background: c.thinkingText, animation: "glia-pulse 1.2s ease-in-out infinite" }) }),
+        /* @__PURE__ */ jsxRuntime.jsx("span", { style: css({ fontSize: 12, color: c.textMuted }), children: "Pensando..." })
       ] })
-    ] })
+    ] }),
+    renderInput ? renderInput(defaultInput) : defaultInput,
+    /* @__PURE__ */ jsxRuntime.jsx("style", { children: "@keyframes glia-pulse{0%,100%{opacity:1}50%{opacity:0.3}}.glia-code{background:var(--glia-code-bg,var(--zea-b2,#1e2432));padding:1px 5px;border-radius:4px;font-size:0.9em}" })
+  ] });
+}
+function StreamingView({ blocks, colors: c, thinkingOpen, onToggleThinking }) {
+  const css = (o) => o;
+  const hasThinking = blocks.some((b) => b.type.startsWith("thinking"));
+  const textBlocks = blocks.filter((b) => b.type === "text_delta");
+  const lastText = textBlocks[textBlocks.length - 1]?.text || "";
+  return /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-stream", style: css({ display: "flex", flexDirection: "column", gap: 8 }), children: [
+    hasThinking && /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-thinking", style: css({ borderRadius: c.radius, overflow: "hidden" }), children: [
+      /* @__PURE__ */ jsxRuntime.jsxs("button", { onClick: onToggleThinking, className: "glia-thinking-toggle", style: css({
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        width: "100%",
+        padding: "6px 12px",
+        border: "none",
+        cursor: "pointer",
+        background: c.thinkingBg,
+        color: c.thinkingText,
+        fontSize: 11,
+        fontFamily: c.font,
+        fontWeight: 600
+      }), children: [
+        /* @__PURE__ */ jsxRuntime.jsx("span", { children: thinkingOpen ? "\u25BC" : "\u25B6" }),
+        /* @__PURE__ */ jsxRuntime.jsx("span", { style: css({ padding: "1px 6px", borderRadius: 4, background: c.thinkingBorder, fontSize: 10 }), children: "thinking" })
+      ] }),
+      thinkingOpen && /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-thinking-body", style: css({
+        padding: "8px 12px",
+        background: c.thinkingBg,
+        borderLeft: `2px solid ${c.thinkingBorder}`,
+        fontSize: 12,
+        lineHeight: 1.5,
+        color: c.thinkingText,
+        whiteSpace: "pre-wrap",
+        fontStyle: "italic"
+      }), children: blocks.filter((b) => b.type === "thinking_delta").map((b) => b.text).join("") })
+    ] }),
+    blocks.filter((b) => b.type === "tool_call").map((b, i) => /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-tool", style: css({
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 12px",
+      borderRadius: 8,
+      background: c.toolBg,
+      border: `1px solid ${c.toolBorder}`,
+      fontSize: 12,
+      color: c.toolText
+    }), children: [
+      /* @__PURE__ */ jsxRuntime.jsxs("span", { style: css({ fontWeight: 600 }), children: [
+        "\u{1F527} ",
+        b.name
+      ] }),
+      /* @__PURE__ */ jsxRuntime.jsx("span", { style: css({ opacity: 0.7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }), children: typeof b.input === "string" ? b.input : JSON.stringify(b.input) })
+    ] }, i)),
+    blocks.filter((b) => b.type === "tool_result").map((b, i) => /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-result", style: css({
+      padding: "8px 12px",
+      borderRadius: 8,
+      background: c.resultBg,
+      border: `1px solid ${c.resultBorder}`,
+      fontSize: 11,
+      lineHeight: 1.5,
+      maxHeight: 150,
+      overflowY: "auto",
+      color: c.resultText,
+      whiteSpace: "pre-wrap",
+      fontFamily: "monospace"
+    }), children: b.content.slice(0, 2e3) }, i)),
+    lastText && /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-bubble glia-stream-text", style: css({
+      padding: "10px 14px",
+      borderRadius: c.radius,
+      background: c.agentBubble,
+      color: c.agentBubbleText,
+      fontSize: 13,
+      lineHeight: 1.55,
+      maxWidth: "85%",
+      borderBottomLeftRadius: "4px"
+    }), children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-md", dangerouslySetInnerHTML: { __html: renderMarkdown(lastText) } }) })
   ] });
 }
 function GliaCopilot({ agentId, apiKey, baseUrl, open = false, onClose }) {

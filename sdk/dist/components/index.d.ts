@@ -8,13 +8,45 @@ interface GliaChatProps {
     baseUrl?: string;
     placeholder?: string;
     welcomeMessage?: string;
-    suggestions?: Array<{
-        icon: string;
-        label: string;
-    }>;
+    /** CSS class applied to root element */
     className?: string;
+    /** Quick color overrides — for full control use CSS variables on parent */
+    colors?: Partial<GliaChatColors>;
+    /** Custom render functions for specific parts */
+    renderMessage?: (msg: GliaChatMessage, defaultRender: React.ReactNode) => React.ReactNode;
+    renderInput?: (defaultRender: React.ReactNode) => React.ReactNode;
 }
-declare function GliaChat({ agentId, conversationId, apiKey, baseUrl, placeholder, welcomeMessage, suggestions, className, }: GliaChatProps): React.JSX.Element;
+interface GliaChatColors {
+    bg: string;
+    text: string;
+    textMuted: string;
+    userBubble: string;
+    userBubbleText: string;
+    agentBubble: string;
+    agentBubbleText: string;
+    thinkingBg: string;
+    thinkingText: string;
+    thinkingBorder: string;
+    toolBg: string;
+    toolText: string;
+    toolBorder: string;
+    resultBg: string;
+    resultText: string;
+    resultBorder: string;
+    inputBg: string;
+    inputBorder: string;
+    primary: string;
+    primaryText: string;
+    font: string;
+    radius: string;
+}
+interface GliaChatMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    timestamp: Date;
+}
+declare function GliaChat({ agentId, conversationId, apiKey, baseUrl, placeholder, welcomeMessage, className, colors: colorsOverride, renderMessage, renderInput, }: GliaChatProps): React.JSX.Element;
 
 interface GliaCopilotProps {
     agentId: string;
