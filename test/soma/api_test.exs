@@ -5,7 +5,7 @@ defmodule Soma.APITest do
   @key "zs_live_bootstrap_test_key_2026"
 
   setup do
-    # Integration tests talk to real server — use :manual sandbox mode
+    # Share DB sandbox with the server process
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Soma.Repo)
     Ecto.Adapters.SQL.Sandbox.mode(Soma.Repo, {:shared, self()})
     :ok

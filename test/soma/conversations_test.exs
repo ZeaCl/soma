@@ -3,9 +3,8 @@ defmodule Soma.ConversationsTest do
 
   alias Soma.{Repo, Conversations}
 
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-  end
+  @org "00000000-0000-0000-0000-000000000001"
+  @org2 "00000000-0000-0000-0000-000000000002"
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -14,24 +13,24 @@ defmodule Soma.ConversationsTest do
   end
 
   test "list returns empty for new org" do
-    convs = Conversations.list("org-nonexistent", "user-1")
+    convs = Conversations.list(@org, "user-1")
     assert convs == []
   end
 
   test "get_or_create creates new conversation" do
-    conv = Conversations.get_or_create("org-test-z", "user-2", "agent-1", "sudlich-app")
+    conv = Conversations.get_or_create(@org, "user-2", "agent-1", "sudlich-app")
     assert conv.title == "Nueva conversación"
-    assert conv.organization_id == "org-test-z"
+    assert conv.organization_id == @org
   end
 
   test "get_or_create returns same conversation on second call" do
-    first = Conversations.get_or_create("org-test-y", "user-3", "agent-2", "app-x")
-    second = Conversations.get_or_create("org-test-y", "user-3", "agent-2", "app-x")
+    first = Conversations.get_or_create(@org, "user-3", "agent-2", "app-x")
+    second = Conversations.get_or_create(@org, "user-3", "agent-2", "app-x")
     assert first.id == second.id
   end
 
   test "add_message persists and is retrievable" do
-    conv = Conversations.get_or_create("org-msg-z", "user-4", "agent-3", "app-y")
+    conv = Conversations.get_or_create(@org, "user-4", "agent-3", "app-y")
     {:ok, msg} = Conversations.add_message(conv.id, %{role: "user", content: "hello"})
     assert msg.role == "user"
     assert msg.content == "hello"
@@ -42,11 +41,11 @@ defmodule Soma.ConversationsTest do
   end
 
   test "soft_delete marks as deleted and excludes from list" do
-    conv = Conversations.get_or_create("org-del-y", "user-5", "agent-4", "app-z")
-    {:ok, deleted} = Conversations.soft_delete("org-del-y", conv.id)
+    conv = Conversations.get_or_create(@org2, "user-5", "agent-4", "app-z")
+    {:ok, deleted} = Conversations.soft_delete(@org2, conv.id)
     assert deleted.is_deleted
 
-    convs = Conversations.list("org-del-y", "user-5")
+    convs = Conversations.list(@org2, "user-5")
     refute Enum.any?(convs, &(&1.id == conv.id))
   end
 end
