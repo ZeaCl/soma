@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { GliaChat } from '@zea/soma-sdk'
 
 interface ChatViewProps { onLogout: () => void }
@@ -19,7 +19,8 @@ export default function ChatView({ onLogout }: ChatViewProps) {
   const [activeItem, setActiveItem] = useState('home')
   const [chatVisible, setChatVisible] = useState(true)
 
-  const agentId = getAgentId()
+  const agentId = useMemo(() => getAgentId(), [])
+  const agentKey = agentId || 'agent'
 
   return (
     <div style={{
@@ -35,7 +36,7 @@ export default function ChatView({ onLogout }: ChatViewProps) {
       {!chatVisible && <div />}
       {chatVisible && (
         <aside style={{ overflow:'hidden', borderLeft: BW }}>
-          <GliaChat agentId={agentId} />
+          <GliaChat key={agentId || 'default-agent'} agentId={agentId} />
         </aside>
       )}
       {!chatVisible && <div />}

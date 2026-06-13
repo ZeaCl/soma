@@ -38,7 +38,14 @@ export function useGlia(options: UseGliaOptions): UseGliaReturn {
 
     ws.onmessage = (event) => {
       try {
-        const d: GliaStreamEvent = JSON.parse(event.data)
+        // Handle both text and binary WebSocket messages
+        let raw = event.data
+        if (typeof raw !== 'string') {
+          raw = Array.isArray(raw) || raw instanceof ArrayBuffer
+            ? new TextDecoder().decode(raw)
+            : typeof raw === 'object' && raw.text ? raw.text() : ''
+        }
+        const d: GliaStreamEvent = JSON.parse(raw)
         switch (d.type) {
           case 'ready':
             readyRef.current = true

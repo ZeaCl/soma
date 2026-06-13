@@ -328,18 +328,20 @@ export async function getMessages(conversationId: string): Promise<StoredMessage
 
 export async function addMessage(conversationId: string, msg: Omit<StoredMessage, 'id' | 'timestamp'>): Promise<StoredMessage | null> {
   try {
+    // Strip dm: prefix for UUID column compatibility
+    const cleanId = conversationId.startsWith('dm:') ? conversationId.slice(3) : conversationId
     // Ensure conversation exists
     await pgPool.query(
-      `INSERT INTO conversations (id, user_id, title, last_message_at, message_count)
-       VALUES ($1, 'system', $2, now(), 1)
+      `INSERT INTO conversations (id, organization_id, user_id, agent_id, app_context, title, last_message_at, message_count)
+       VALUES ($1, $2, $3, $4, $5, $6, now(), 1)
        ON CONFLICT (id) DO UPDATE SET last_message_at = now(), message_count = conversations.message_count + 1`,
-      [conversationId, msg.content?.slice(0, 80) || '']
+      [cleanId, '00000000-0000-0000-0000-000000000000', 'system', cleanId, 'chat', msg.content?.slice(0, 80) || '']
     )
     // Insert message
     const { rows } = await pgPool.query(
       `INSERT INTO messages (conversation_id, role, content, thinking, tools)
        VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
-      [conversationId, msg.role, msg.content, msg.thinking || null, msg.tools ? JSON.stringify(msg.tools) : null]
+      [cleanId, msg.role, msg.content, msg.thinking || null, msg.tools ? JSON.stringify(msg.tools) : null]
     )
     return {
       id: rows[0].id,

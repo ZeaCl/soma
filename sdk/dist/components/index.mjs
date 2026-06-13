@@ -34,7 +34,11 @@ function useGlia(options) {
     };
     ws.onmessage = (event) => {
       try {
-        const d = JSON.parse(event.data);
+        let raw = event.data;
+        if (typeof raw !== "string") {
+          raw = Array.isArray(raw) || raw instanceof ArrayBuffer ? new TextDecoder().decode(raw) : typeof raw === "object" && raw.text ? raw.text() : "";
+        }
+        const d = JSON.parse(raw);
         switch (d.type) {
           case "ready":
             readyRef.current = true;
