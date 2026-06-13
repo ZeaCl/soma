@@ -1,0 +1,8 @@
+{
+  "name": "@zea/soma-cli",
+  "version": "0.1.0",
+  "description": "CLI for ZEA Soma AgentHub",
+  "bin": { "soma": "./index.js" },
+  "license": "Apache-2.0",
+  "dependencies": {}
+}
