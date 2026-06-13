@@ -1,11 +1,6 @@
 import { useState } from 'react'
 
-interface LoginProps {
-  onBack: () => void
-  onSuccess: () => void
-}
-
-const THALAMUS_URL = 'http://auth.zea.localhost'
+interface LoginProps { onBack: () => void; onSuccess: () => void }
 
 export default function Login({ onBack, onSuccess }: LoginProps) {
   const [email, setEmail] = useState('')
@@ -17,22 +12,8 @@ export default function Login({ onBack, onSuccess }: LoginProps) {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
-      // Login via Thalamus session endpoint
-      const res = await fetch(`${THALAMUS_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          'session[email]': email,
-          'session[password]': password,
-        }).toString(),
-        redirect: 'manual',
-      })
-
-      // Thalamus redirects on success — try the OAuth2 token flow instead
-      // Fallback: try agent-token endpoint
-      const tokenRes = await fetch(`${THALAMUS_URL}/api/internal/agent-token`, {
+      const res = await fetch('http://auth.zea.localhost/api/internal/agent-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -40,22 +21,12 @@ export default function Login({ onBack, onSuccess }: LoginProps) {
           scopes: ['cranium:read', 'cranium:write'],
         }),
       })
-
-      if (tokenRes.ok) {
-        const data = await tokenRes.json()
-        localStorage.setItem('soma_token', data.token || data.access_token || '')
+      if (res.ok) {
+        const data = await res.json()
+        localStorage.setItem('soma_token', data.token || 'ok')
         onSuccess()
       } else {
-        // If agent-token fails, try verifying the session from the redirect
-        const sessionRes = await fetch(`${THALAMUS_URL}/api/me`, {
-          headers: { 'Cookie': res.headers.get('set-cookie') || '' },
-        })
-        if (sessionRes.ok) {
-          localStorage.setItem('soma_token', 'session')
-          onSuccess()
-        } else {
-          setError('Invalid credentials. Try c@zea.cl / 2Infinit0')
-        }
+        setError('Authentication failed. Is Thalamus running?')
       }
     } catch {
       setError('Connection error. Is Thalamus running?')
@@ -64,76 +35,80 @@ export default function Login({ onBack, onSuccess }: LoginProps) {
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 14px',
+    background: 'var(--zea-b3)', border: '1px solid var(--zea-b2)',
+    borderRadius: 'var(--zea-rounded-btn)', color: 'var(--zea-bc)',
+    fontSize: 15, fontFamily: 'inherit', outline: 'none',
+  }
+
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      minHeight: '100vh', padding: 24,
+      minHeight: '100vh', padding: 24, background: 'var(--zea-b3)',
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
-        {/* Back link */}
         <button onClick={onBack} style={{
-          background: 'none', border: 'none', color: 'var(--zea-bc-muted)',
-          cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, marginBottom: 32,
-          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'none', border: 'none',
+          color: 'color-mix(in oklch, var(--zea-bc) 50%, transparent)',
+          cursor: 'pointer', fontFamily: 'inherit', fontSize: 14,
+          marginBottom: 40, display: 'flex', alignItems: 'center', gap: 6,
         }}>
           ← Back
         </button>
 
-        <div style={{ marginBottom: 32 }}>
-          <img src="/icono-zea.svg" alt="ZEA" style={{ height: 32, marginBottom: 12 }} />
+        <div style={{ marginBottom: 36 }}>
+          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
+            <img src="/icono-zea.svg" alt="ZEA" style={{ height: 28 }} />
+            <span style={{ fontWeight: 700, fontSize: 20, color: 'var(--zea-bc)' }}>Soma</span>
+          </a>
           <h1 className="zea-heading-lg" style={{ marginBottom: 8 }}>Sign in to Soma</h1>
-          <p className="zea-body-sm" style={{ color: 'var(--zea-bc-muted)' }}>
-            Use your ZEA Platform account.
+          <p className="zea-body-sm" style={{ color: 'color-mix(in oklch, var(--zea-bc) 40%, transparent)' }}>
+            Use your ZEA Platform account to access the agent.
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
-              <label className="zea-label" htmlFor="email">Email</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="c@zea.cl"
-                required
-                className="zea-input"
-                autoFocus
-              />
+              <label className="zea-label-lg" style={{ display: 'block', marginBottom: 8, color: 'color-mix(in oklch, var(--zea-bc) 70%, transparent)' }}>
+                Email
+              </label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="c@zea.cl" required autoFocus style={inputStyle} />
             </div>
             <div>
-              <label className="zea-label" htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="········"
-                required
-                className="zea-input"
-              />
+              <label className="zea-label-lg" style={{ display: 'block', marginBottom: 8, color: 'color-mix(in oklch, var(--zea-bc) 70%, transparent)' }}>
+                Password
+              </label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="········" required style={inputStyle} />
             </div>
 
             {error && (
-              <div className="zea-alert zea-alert--error">
+              <div style={{
+                padding: '14px 16px', borderRadius: 12,
+                background: 'color-mix(in oklch, var(--zea-er) 10%, transparent)',
+                border: '1px solid color-mix(in oklch, var(--zea-er) 20%, transparent)',
+                color: 'oklch(70% 0.2 17)', fontSize: 13, lineHeight: 1.5,
+              }}>
                 {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
+            <button type="submit" disabled={loading}
               className="zea-btn zea-btn--primary zea-btn--md zea-btn--primary-shadow"
-              style={{ width: '100%', marginTop: 8 }}
-            >
+              style={{ width: '100%', marginTop: 8 }}>
               {loading ? 'Signing in...' : 'Sign In →'}
             </button>
           </div>
         </form>
 
-        <p className="zea-body-sm" style={{ color: 'var(--zea-bc-muted)', textAlign: 'center', marginTop: 24 }}>
-          Test credentials: c@zea.cl / 2Infinit0
+        <p style={{
+          fontSize: 12, textAlign: 'center', marginTop: 28,
+          color: 'color-mix(in oklch, var(--zea-bc) 25%, transparent)',
+        }}>
+          Test: c@zea.cl / 2Infinit0
         </p>
       </div>
     </div>
