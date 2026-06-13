@@ -28,84 +28,127 @@ function useGlia(options) {
   const [streamContent, setStreamContent] = react.useState("");
   const streamRef = react.useRef("");
   const wsUrl = baseUrl ? `${baseUrl.replace("http", "ws")}/agent-ws` : `ws://${typeof window !== "undefined" ? window.location.host : "localhost"}/agent-ws`;
+  const contentRef = react.useRef("");
+  const thinkingRef = react.useRef("");
   const connect = react.useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     const ws = new WebSocket(wsUrl);
+    ws.binaryType = "arraybuffer";
     ws.onopen = () => {
+      console.log("[useGlia] ws open \u2192 sending init");
       ws.send(JSON.stringify({ type: "init", uid: agentId, cid: conversationId }));
     };
     ws.onmessage = (event) => {
       try {
-        let raw = event.data;
-        if (typeof raw !== "string") {
-          raw = Array.isArray(raw) || raw instanceof ArrayBuffer ? new TextDecoder().decode(raw) : typeof raw === "object" && raw.text ? raw.text() : "";
+        let raw;
+        if (typeof event.data === "string") {
+          raw = event.data;
+        } else if (event.data instanceof ArrayBuffer) {
+          raw = new TextDecoder().decode(event.data);
+        } else if (event.data instanceof Blob) {
+          event.data.text().then((text) => {
+            processMessage(text, ws);
+          }).catch(() => {
+          });
+          return;
+        } else {
+          console.warn("[useGlia] unknown message type:", typeof event.data, event.data);
+          return;
         }
-        const d = JSON.parse(raw);
-        switch (d.type) {
-          case "ready":
-            readyRef.current = true;
-            setIsConnected(true);
-            for (const t of pendingRef.current) {
-              ws.send(JSON.stringify({ type: "prompt", text: t }));
-            }
-            pendingRef.current = [];
-            break;
-          case "thinking_start":
-            setIsStreaming(true);
-            break;
-          case "thinking":
-            onThinking?.(d.text);
-            break;
-          case "thinking_end":
-            break;
-          case "delta":
-            streamRef.current += d.text;
-            setStreamContent(streamRef.current);
-            onDelta?.(d.text);
-            break;
-          case "tool":
-            onTool?.(d.name, d.input);
-            break;
-          case "done":
-            setIsStreaming(false);
-            if (streamRef.current) {
-              setMessages((prev) => [...prev, {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content: streamRef.current,
-                timestamp: /* @__PURE__ */ new Date()
-              }]);
-              streamRef.current = "";
-              setStreamContent("");
-            }
-            onDone?.();
-            break;
-          case "cancelled":
-            setIsStreaming(false);
-            if (streamRef.current) {
-              setMessages((prev) => [...prev, {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content: streamRef.current + "\n\n_\u23F9\uFE0F Cancelado_",
-                timestamp: /* @__PURE__ */ new Date()
-              }]);
-              streamRef.current = "";
-              setStreamContent("");
-            }
-            onCancelled?.();
-            break;
-          case "error":
-            setIsStreaming(false);
-            onError?.(d.message);
-            break;
-        }
-      } catch {
+        processMessage(raw, ws);
+      } catch (e) {
+        console.error("[useGlia] onmessage error:", e, "raw type:", typeof event.data);
       }
     };
+    function processMessage(raw, ws2) {
+      const d = JSON.parse(raw);
+      switch (d.type) {
+        case "ready":
+          readyRef.current = true;
+          setIsConnected(true);
+          console.log("[useGlia] \u2190 ready, pending:", pendingRef.current.length);
+          for (const t of pendingRef.current) {
+            ws2.send(JSON.stringify({ type: "prompt", text: t }));
+          }
+          pendingRef.current = [];
+          break;
+        case "thinking_start":
+          setIsStreaming(true);
+          thinkingRef.current = "";
+          break;
+        case "thinking":
+          thinkingRef.current += d.text;
+          onThinking?.(d.text);
+          break;
+        case "thinking_end":
+          break;
+        case "delta":
+          streamRef.current += d.text;
+          contentRef.current = streamRef.current;
+          setStreamContent(streamRef.current);
+          onDelta?.(d.text);
+          break;
+        case "tool":
+          onTool?.(d.name, d.input);
+          break;
+        case "done": {
+          setIsStreaming(false);
+          const content = contentRef.current || streamRef.current;
+          console.log("[useGlia] \u2190 done, content length:", content.length, "contentRef:", !!contentRef.current, "streamRef:", !!streamRef.current);
+          const thinking = thinkingRef.current.trim() || void 0;
+          console.log("[useGlia] \u2190 done, content:", content.length, "thinking:", (thinking || "").length, "contentRef:", !!contentRef.current);
+          if (content || thinking) {
+            setMessages((prev) => [...prev, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: content || "(sin respuesta)",
+              thinking,
+              timestamp: /* @__PURE__ */ new Date()
+            }]);
+            contentRef.current = "";
+            streamRef.current = "";
+            thinkingRef.current = "";
+            setStreamContent("");
+          } else {
+            console.warn("[useGlia] \u2190 done but NO content accumulated \u2014 message lost");
+          }
+          onDone?.();
+          break;
+        }
+        case "cancelled": {
+          setIsStreaming(false);
+          const content = contentRef.current || streamRef.current || "";
+          if (content) {
+            setMessages((prev) => [...prev, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: content + "\n\n_\u23F9\uFE0F Cancelado_",
+              thinking: thinkingRef.current.trim() || void 0,
+              timestamp: /* @__PURE__ */ new Date()
+            }]);
+            contentRef.current = "";
+            streamRef.current = "";
+            thinkingRef.current = "";
+            setStreamContent("");
+          }
+          onCancelled?.();
+          break;
+        }
+        case "error":
+          setIsStreaming(false);
+          console.error("[useGlia] \u2190 error:", d.message);
+          onError?.(d.message);
+          break;
+      }
+    }
     ws.onclose = () => {
       setIsConnected(false);
+      console.log("[useGlia] ws closed");
     };
-    ws.onerror = () => onError?.("Connection error");
+    ws.onerror = () => {
+      console.error("[useGlia] ws error");
+      onError?.("Connection error");
+    };
     wsRef.current = ws;
   }, [wsUrl, agentId, conversationId]);
   react.useEffect(() => {
@@ -369,17 +412,56 @@ function GliaChat({
     setCancelling(true);
     cancel();
   };
-  const defaultMessage = (msg) => /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-msg", style: css({ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }), children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-bubble", style: css({
-    maxWidth: "85%",
-    padding: "10px 14px",
-    borderRadius: c.radius,
-    fontSize: 13,
-    lineHeight: 1.55,
-    background: msg.role === "user" ? c.userBubble : c.agentBubble,
-    color: msg.role === "user" ? c.userBubbleText : c.agentBubbleText,
-    borderBottomRightRadius: msg.role === "user" ? "4px" : c.radius,
-    borderBottomLeftRadius: msg.role !== "user" ? "4px" : c.radius
-  }), children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-md", dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) } }) }) }, msg.id);
+  const [thinkingOpenIds, setThinkingOpenIds] = react.useState({});
+  const toggleMsgThinking = react.useCallback((id) => {
+    setThinkingOpenIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+  const defaultMessage = (msg) => {
+    const thinkingOpen2 = !!thinkingOpenIds[msg.id];
+    return /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-msg", style: css({ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", gap: 4 }), children: [
+      msg.thinking && /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-thinking-persisted", style: css({ maxWidth: "85%", borderRadius: c.radius, overflow: "hidden" }), children: [
+        /* @__PURE__ */ jsxRuntime.jsxs("button", { onClick: () => toggleMsgThinking(msg.id), style: css({
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          width: "100%",
+          padding: "4px 10px",
+          border: "none",
+          cursor: "pointer",
+          background: c.thinkingBg,
+          color: c.thinkingText,
+          fontSize: 10,
+          fontFamily: c.font,
+          fontWeight: 600,
+          borderRadius: thinkingOpen2 ? `${c.radius} ${c.radius} 0 0` : c.radius
+        }), children: [
+          /* @__PURE__ */ jsxRuntime.jsx("span", { style: css({ fontSize: 10 }), children: thinkingOpen2 ? "\u25BC" : "\u25B6" }),
+          /* @__PURE__ */ jsxRuntime.jsx("span", { style: css({ padding: "0px 5px", borderRadius: 3, background: c.thinkingBorder, fontSize: 9 }), children: "thinking" })
+        ] }),
+        thinkingOpen2 && /* @__PURE__ */ jsxRuntime.jsx("div", { style: css({
+          padding: "6px 10px",
+          background: c.thinkingBg,
+          borderLeft: `2px solid ${c.thinkingBorder}`,
+          fontSize: 11,
+          lineHeight: 1.5,
+          color: c.thinkingText,
+          whiteSpace: "pre-wrap",
+          fontStyle: "italic"
+        }), children: msg.thinking })
+      ] }),
+      /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-bubble", style: css({
+        maxWidth: "85%",
+        padding: "10px 14px",
+        borderRadius: c.radius,
+        fontSize: 13,
+        lineHeight: 1.55,
+        background: msg.role === "user" ? c.userBubble : c.agentBubble,
+        color: msg.role === "user" ? c.userBubbleText : c.agentBubbleText,
+        borderBottomRightRadius: msg.role === "user" ? "4px" : c.radius,
+        borderBottomLeftRadius: msg.role !== "user" ? "4px" : c.radius
+      }), children: /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-md", dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) } }) })
+    ] }, msg.id);
+  };
   const defaultInput = /* @__PURE__ */ jsxRuntime.jsx("div", { className: "glia-input-area", style: css({ padding: "12px 16px", borderTop: `1px solid ${c.inputBorder}`, flexShrink: 0 }), children: /* @__PURE__ */ jsxRuntime.jsxs("div", { className: "glia-input-row", style: css({
     display: "flex",
     alignItems: "flex-end",

@@ -47,7 +47,7 @@ export interface GliaChatColors {
 }
 
 export interface GliaChatMessage {
-  id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: Date
+  id: string; role: 'user' | 'assistant' | 'system'; content: string; thinking?: string; timestamp: Date
 }
 
 // ── Default colors (ZEA design tokens) ──
@@ -149,9 +149,37 @@ export function GliaChat({
   const handleSend = () => { const t = input.trim(); if (t && !isStreaming) { send(t); setInput('') } }
   const handleCancel = () => { setCancelling(true); cancel() }
 
+  // Per-message thinking open state (Record avoids TSX generic ambiguity)
+  const [thinkingOpenIds, setThinkingOpenIds] = useState<Record<string, boolean>>({})
+  const toggleMsgThinking = useCallback((id: string) => {
+    setThinkingOpenIds(prev => ({ ...prev, [id]: !prev[id] }))
+  }, [])
+
   // ── Message bubble ──
-  const defaultMessage = (msg: GliaChatMessage) => (
-    <div key={msg.id} className="glia-msg" style={css({ display:'flex', justifyContent: msg.role==='user'?'flex-end':'flex-start' })}>
+  const defaultMessage = (msg: GliaChatMessage) => {
+    const thinkingOpen = !!thinkingOpenIds[msg.id]
+    return (
+    <div key={msg.id} className="glia-msg" style={css({ display:'flex', flexDirection:'column', alignItems: msg.role==='user'?'flex-end':'flex-start', gap:4 })}>
+      {/* Thinking block (persisted) */}
+      {msg.thinking && (
+        <div className="glia-thinking-persisted" style={css({ maxWidth:'85%', borderRadius: c.radius, overflow:'hidden' })}>
+          <button onClick={() => toggleMsgThinking(msg.id)} style={css({
+            display:'flex', alignItems:'center', gap:6, width:'100%', padding:'4px 10px',
+            border:'none', cursor:'pointer', background:c.thinkingBg, color:c.thinkingText,
+            fontSize:10, fontFamily:c.font, fontWeight:600, borderRadius: thinkingOpen ? `${c.radius} ${c.radius} 0 0` : c.radius,
+          })}>
+            <span style={css({ fontSize:10 })}>{thinkingOpen ? '▼' : '▶'}</span>
+            <span style={css({ padding:'0px 5px', borderRadius:3, background:c.thinkingBorder, fontSize:9 })}>thinking</span>
+          </button>
+          {thinkingOpen && (
+            <div style={css({
+              padding:'6px 10px', background:c.thinkingBg, borderLeft:`2px solid ${c.thinkingBorder}`,
+              fontSize:11, lineHeight:1.5, color:c.thinkingText, whiteSpace:'pre-wrap', fontStyle:'italic',
+            })}>{msg.thinking}</div>
+          )}
+        </div>
+      )}
+      {/* Text bubble */}
       <div className="glia-bubble" style={css({
         maxWidth:'85%', padding:'10px 14px', borderRadius: c.radius, fontSize:13, lineHeight:1.55,
         background: msg.role==='user' ? c.userBubble : c.agentBubble,
@@ -162,7 +190,7 @@ export function GliaChat({
         <div className="glia-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
       </div>
     </div>
-  )
+  )}
 
   // ── Input area ──
   const defaultInput = (
