@@ -1,0 +1,10 @@
+{
+  "name": "soma-pi-sidecar",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "ws": "^8.18.0",
+    "pg": "^8.13.0"
+  }
+}

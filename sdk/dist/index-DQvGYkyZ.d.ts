@@ -1,0 +1,92 @@
+interface GliaMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    thinking?: string;
+    tools?: Array<{
+        name: string;
+        input: unknown;
+        result?: string;
+    }>;
+    timestamp: Date;
+}
+interface GliaConversation {
+    id: string;
+    title: string;
+    lastMessageAt: string;
+    messageCount: number;
+}
+interface GliaFile {
+    name: string;
+    type: 'file' | 'dir';
+    size: number;
+    ext?: string;
+}
+interface GliaSkill {
+    name: string;
+    description: string;
+    builtin: boolean;
+    custom: boolean;
+    agents?: string[];
+}
+interface GliaAgent {
+    id: string;
+    email: string;
+    is_agent: boolean;
+    agent_config?: {
+        skills: string[];
+        system_prompt?: string;
+        workspace_paths?: string[];
+        engine?: 'pi' | 'glia';
+    };
+}
+type GliaStreamEvent = {
+    type: 'thinking_start';
+} | {
+    type: 'thinking';
+    text: string;
+} | {
+    type: 'thinking_end';
+} | {
+    type: 'delta';
+    text: string;
+} | {
+    type: 'tool';
+    name: string;
+    input: unknown;
+} | {
+    type: 'tool_result';
+    content: string;
+} | {
+    type: 'done';
+} | {
+    type: 'cancelled';
+} | {
+    type: 'error';
+    message: string;
+} | {
+    type: 'ready';
+};
+interface UseGliaOptions {
+    agentId: string;
+    conversationId?: string;
+    apiKey?: string;
+    baseUrl?: string;
+    onDelta?: (text: string) => void;
+    onThinking?: (text: string) => void;
+    onTool?: (name: string, input: unknown) => void;
+    onDone?: () => void;
+    onCancelled?: () => void;
+    onError?: (message: string) => void;
+}
+interface UseGliaReturn {
+    send: (text: string) => void;
+    cancel: () => void;
+    isConnected: boolean;
+    isStreaming: boolean;
+    messages: GliaMessage[];
+    streamContent: string;
+    reconnect: () => void;
+}
+
+export type { GliaAgent as G, UseGliaOptions as U, GliaConversation as a, GliaFile as b, GliaMessage as c, GliaSkill as d, GliaStreamEvent as e, UseGliaReturn as f };

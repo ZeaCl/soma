@@ -1,0 +1,21 @@
+import Config
+
+config :soma, ecto_repos: [Soma.Repo]
+
+config :soma, Soma.Repo,
+  url: System.get_env("DATABASE_URL", "postgresql://postgres:postgres_secure_password@localhost:5432/soma_prod"),
+  pool_size: 3
+
+config :soma, SomaWeb.Endpoint,
+  server: true,
+  url: [host: "localhost"],
+  render_errors: [formats: [json: SomaWeb.ErrorJSON]],
+  pubsub_server: Soma.PubSub
+
+config :soma, :thalamus,
+  url: System.get_env("THALAMUS_URL", "http://thalamus:4000"),
+  jwks_url: "http://thalamus:4000/.well-known/jwks.json"
+
+config :logger, level: :info
+
+import_config "#{config_env()}.exs"
