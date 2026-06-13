@@ -1,9 +1,9 @@
 #!/bin/bash
 # soma-agent-useradd — crea usuario Linux para un agente
 # Usage: soma-agent-useradd <agent-id> <org-id> [teams] [mounts-json]
-# Requiere: root o sudo
+# Requiere: root o sudo, SYS_ADMIN cap para mount --bind
 
-set -euo pipefail
+set -eu
 
 AGENT_ID="${1:-}"
 ORG_ID="${2:-}"
@@ -27,20 +27,14 @@ echo ""
 
 # ── Detect Alpine vs GNU ──────────────────────────────────────────
 if [ -f /etc/alpine-release ]; then
-  GROUPADD="addgroup"
-  USERADD="adduser -D -s $SHELL"
-  USERMOD="addgroup"  # Alpine: addgroup user group
   IS_ALPINE=true
 else
-  GROUPADD="groupadd --force"
-  USERADD="useradd --home-dir $HOMEDIR --shell $SHELL --no-create-home"
-  USERMOD="usermod -aG"
   IS_ALPINE=false
 fi
 
 # ── 1. Crear grupo primario ──────────────────────────────────────────
 if ! getent group "$USERNAME" >/dev/null 2>&1; then
-  $GROUPADD "$USERNAME"
+  if [ "$IS_ALPINE" = true ]; then addgroup "$USERNAME"; else groupadd --force "$USERNAME"; fi
   echo "   ✅ Group: $USERNAME"
 else
   echo "   ⚠️  Group $USERNAME already exists — reusing"
@@ -53,37 +47,25 @@ else
   if [ "$IS_ALPINE" = true ]; then
     adduser -D -s "$SHELL" -h "$HOMEDIR" -G "$USERNAME" "$USERNAME"
   else
-    UID_NUM=$((2000 + $(echo "$AGENT_ID" | cksum | cut -d' ' -f1) % 63000))
-    useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --no-create-home --uid "$UID_NUM" "$USERNAME" 2>/dev/null || {
-      useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --no-create-home "$USERNAME"
-    }
+    useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --no-create-home "$USERNAME"
   fi
   echo "   ✅ User created: uid=$(id -u "$USERNAME")"
 fi
 
 # ── 3. Agregar a grupos ──────────────────────────────────────────────
-$GROUPADD soma-agents 2>/dev/null || true
-if [ "$IS_ALPINE" = true ]; then
-  addgroup "$USERNAME" soma-agents 2>/dev/null || true
-else
-  usermod -aG soma-agents "$USERNAME"
-fi
+_add_group() { if [ "$IS_ALPINE" = true ]; then addgroup "$1" 2>/dev/null || true; else groupadd --force "$1" 2>/dev/null || true; fi; }
+_add_user_to_group() { if [ "$IS_ALPINE" = true ]; then addgroup "$1" "$2" 2>/dev/null || true; else usermod -aG "$2" "$1" 2>/dev/null || true; fi; }
 
-$GROUPADD "org-${ORG_ID}" 2>/dev/null || true
-if [ "$IS_ALPINE" = true ]; then
-  addgroup "$USERNAME" "org-${ORG_ID}" 2>/dev/null || true
-else
-  usermod -aG "org-${ORG_ID}" "$USERNAME"
-fi
+_add_group soma-agents
+_add_user_to_group "$USERNAME" soma-agents
+
+_add_group "org-${ORG_ID}"
+_add_user_to_group "$USERNAME" "org-${ORG_ID}"
 
 if [ -n "$TEAMS" ]; then
   for team in $(echo "$TEAMS" | tr ',' ' '); do
-    $GROUPADD "team-${team}" 2>/dev/null || true
-    if [ "$IS_ALPINE" = true ]; then
-      addgroup "$USERNAME" "team-${team}" 2>/dev/null || true
-    else
-      usermod -aG "team-${team}" "$USERNAME"
-    fi
+    _add_group "team-${team}"
+    _add_user_to_group "$USERNAME" "team-${team}"
   done
 fi
 
@@ -93,51 +75,38 @@ echo "   ✅ Groups: $(groups "$USERNAME" | cut -d: -f2)"
 mkdir -p "$HOMEDIR/workspace"
 mkdir -p "$HOMEDIR/.config"
 mkdir -p "$HOMEDIR/.pi-sessions"
-
-# Copiar templates base si existen
-if [ -d "$BOOTSTRAP" ]; then
-  cp "$BOOTSTRAP/.bashrc" "$HOMEDIR/" 2>/dev/null || true
-  cp "$BOOTSTRAP/.gitconfig" "$HOMEDIR/" 2>/dev/null || true
-fi
+[ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.bashrc" "$HOMEDIR/" 2>/dev/null || true
+[ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.gitconfig" "$HOMEDIR/" 2>/dev/null || true
 
 # ── 5. Permisos ──────────────────────────────────────────────────────
 chown -R "$USERNAME:$USERNAME" "$HOMEDIR"
 chmod 700 "$HOMEDIR"
 chmod 700 "$HOMEDIR/workspace"
+echo "   ✅ Permissions: $(stat -c '%a %U:%G' "$HOMEDIR" 2>/dev/null || stat -f '%A %Su:%Sg' "$HOMEDIR")"
 
-echo "   ✅ Permissions: $(stat -c '%a %U:%G' "$HOMEDIR")"
+# ── 6. Montar volúmenes compartidos (bash puro, sin python) ──────────
+_mount_bind() {
+  local src="$1" dst="$2" ro="$3"
+  [ ! -d "$src" ] && { echo "   ⚠️  Source not found: $src — skipping"; return; }
+  mkdir -p "$dst"
+  if [ "$ro" = "true" ]; then
+    mount --bind -o ro "$src" "$dst" 2>/dev/null && echo "   ✅ Mount: $src → $dst (ro)" || echo "   ⚠️  Mount failed: $src (ro)"
+  else
+    mount --bind "$src" "$dst" 2>/dev/null && echo "   ✅ Mount: $src → $dst (rw)" || echo "   ⚠️  Mount failed: $src"
+  fi
+}
 
-# ── 6. Montar volúmenes compartidos ──────────────────────────────────
-echo "$MOUNTS_JSON" | python3 -c "
-import sys, json, subprocess, os
-
-try:
-    mounts = json.load(sys.stdin) if isinstance(sys.stdin, str) else json.loads(sys.stdin.read())
-except:
-    mounts = []
-
-for m in mounts if isinstance(mounts, list) else []:
-    source = m.get('source', '')
-    dest = m.get('dest', 'shared')
-    ro = m.get('ro', False)
-
-    if not source or not os.path.exists(source):
-        print(f'   ⚠️  Mount source not found: {source} — skipping')
-        continue
-
-    target = f'$HOMEDIR/{dest}'
-    os.makedirs(target, exist_ok=True)
-
-    opts = 'bind'
-    if ro: opts += ',ro'
-
-    try:
-        subprocess.run(['mount', '--bind', '-o', opts, source, target], check=True)
-        print(f'   ✅ Mount: {source} → {target} {\"(ro)\" if ro else \"(rw)\"}')
-    except subprocess.CalledProcessError as e:
-        print(f'   ⚠️  Mount failed: {e} — continuing')
-" 2>/dev/null || echo "   ⚠️  Mount processing failed — continuing without mounts"
+if [ -n "$MOUNTS_JSON" ] && [ "$MOUNTS_JSON" != "[]" ]; then
+  echo "   Processing mounts..."
+  # Parse simple JSON array of {source, dest, ro} objects
+  echo "$MOUNTS_JSON" | tr '}' '\n' | while read -r chunk; do
+    src=$(echo "$chunk" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    dst=$(echo "$chunk" | sed -n 's/.*"dest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    ro=$(echo "$chunk" | grep -q '"ro"[[:space:]]*:[[:space:]]*true' && echo "true" || echo "false")
+    [ -n "$src" ] && _mount_bind "$src" "$HOMEDIR/${dst:-shared}" "$ro"
+  done
+fi
 
 echo ""
 echo "✅ Agent user ready: $USERNAME"
-echo "   uid=$(id -u "$USERNAME") home=$HOMEDIR groups=$(groups "$USERNAME" | cut -d: -f2)"
+echo "   uid=$(id -u "$USERNAME" 2>/dev/null || echo '?')" home=$HOMEDIR groups="$(groups "$USERNAME" 2>/dev/null | cut -d: -f2 || echo '?')"
