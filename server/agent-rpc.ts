@@ -785,7 +785,7 @@ wss.on('connection', (ws: WebSocket) => {
         session = await engine.createSession({
           systemPrompt: config.systemPrompt,
           skillPaths: config.skillPaths,
-          tools: ['read', 'bash', 'edit', 'write'],
+          tools: config.tools || ['read', 'bash', 'edit', 'write'],
           workspacePaths: config.workspacePaths,
           sessionDir: dir,
           modelRegistry,

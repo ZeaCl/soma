@@ -247,11 +247,34 @@ defmodule SomaWeb.ApiController do
     end
   end
 
+  post "/agents" do
+    org_id = conn.assigns[:org_id]
+    attrs = conn.body_params
+    case Skills.create_agent(org_id, attrs) do
+      {:ok, agent} -> send_resp(conn, 201, Jason.encode!(%{data: agent}))
+      {:error, reason} -> send_resp(conn, 422, Jason.encode!(%{error: reason}))
+    end
+  end
+
+  get "/agents/:id" do
+    case Skills.get_agent(id) do
+      {:ok, agent} -> send_resp(conn, 200, Jason.encode!(%{data: agent}))
+      {:error, :not_found} -> send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+    end
+  end
+
   put "/agents/:id/config" do
     attrs = conn.body_params
     case Skills.update_agent_config(id, attrs) do
       {:ok, config} -> send_resp(conn, 200, Jason.encode!(%{ok: true, config: config}))
       {:error, reason} -> send_resp(conn, 500, Jason.encode!(%{error: reason}))
+    end
+  end
+
+  delete "/agents/:id" do
+    case Skills.delete_agent(id) do
+      {:ok, _} -> send_resp(conn, 200, Jason.encode!(%{ok: true}))
+      {:error, :not_found} -> send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
     end
   end
 

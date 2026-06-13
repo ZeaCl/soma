@@ -118,13 +118,78 @@ defmodule Soma.Skills do
 
   def update_agent_config(agent_id, attrs) do
     thalamus_url = Application.get_env(:soma, :thalamus)[:url]
+    # Ensure engine field is supported
+    config = Map.take(attrs, ["system_prompt", "skills", "tools", "workspace_paths", "engine"])
     case Req.patch("#{thalamus_url}/api/users/#{agent_id}",
-           json: %{agent_config: attrs},
+           json: %{agent_config: config},
            receive_timeout: 5000) do
-      {:ok, %{status: 200}} -> {:ok, attrs}
+      {:ok, %{status: 200}} ->
+        # Also update local config file for fallback
+        update_local_config(agent_id, config)
+        {:ok, config}
       {:ok, %{status: code}} -> {:error, "Thalamus returned #{code}"}
       {:error, reason} -> {:error, inspect(reason)}
     end
+  end
+
+  def create_agent(org_id, attrs) do
+    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
+    body = %{
+      email: attrs["email"],
+      name: attrs["name"],
+      is_agent: true,
+      organization_id: org_id,
+      agent_config: %{
+        engine: attrs["engine"] || "pi",
+        system_prompt: attrs["system_prompt"],
+        skills: attrs["skills"] || [],
+        tools: attrs["tools"] || ["read", "bash", "edit", "write"],
+        workspace_paths: attrs["workspace_paths"] || []
+      }
+    }
+    case Req.post("#{thalamus_url}/api/users", json: body, receive_timeout: 5000) do
+      {:ok, %{status: 201, body: resp}} ->
+        agent = resp["data"] || resp
+        update_local_config(agent["id"], agent["agent_config"] || %{})
+        {:ok, agent}
+      {:ok, %{status: code, body: resp}} ->
+        {:error, resp["error"] || "Thalamus returned #{code}"}
+      {:error, reason} -> {:error, inspect(reason)}
+    end
+  end
+
+  def get_agent(agent_id) do
+    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
+    case Req.get("#{thalamus_url}/api/users/#{agent_id}", receive_timeout: 5000) do
+      {:ok, %{status: 200, body: body}} ->
+        {:ok, body["data"] || body}
+      {:ok, %{status: 404}} ->
+        {:error, :not_found}
+      {:error, _} -> {:error, :not_found}
+    end
+  end
+
+  def delete_agent(agent_id) do
+    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
+    case Req.delete("#{thalamus_url}/api/users/#{agent_id}", receive_timeout: 5000) do
+      {:ok, %{status: code}} when code in [200, 204] -> {:ok, agent_id}
+      {:ok, %{status: 404}} -> {:error, :not_found}
+      {:error, reason} -> {:error, inspect(reason)}
+    end
+  end
+
+  defp update_local_config(agent_id, config) do
+    config_dir = "/root/.agents/agent-configs"
+    File.mkdir_p!(config_dir)
+    File.write!(
+      Path.join(config_dir, "#{agent_id}.json"),
+      Jason.encode!(%{
+        thalamus_user_id: agent_id,
+        system_prompt: config["system_prompt"],
+        workspace_paths: config["workspace_paths"] || [],
+        engine: config["engine"] || "pi"
+      })
+    )
   end
 
   # ── App Context (AGENTS.md) ──────────────────
