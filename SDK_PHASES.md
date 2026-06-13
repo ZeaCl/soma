@@ -203,9 +203,8 @@ export interface AgentConfig {
   skills?: string[]
   tools?: string[]
   workspacePaths?: string[]
+  engine?: 'pi' | 'react' | 'opencode' | 'hermes' | 'goose'
 }
-
-export interface Agent {
   id: string
   email?: string
   isAgent: boolean
@@ -234,6 +233,50 @@ export interface AgentProvider {
 
 ---
 
+## Fase 6 — Multi-Engine Backend
+
+**Objetivo:** Cada agente puede usar un motor de IA distinto (Pi, ReAct, OpenCode, Hermes, Goose).
+**Doc completa:** `ENGINE_REGISTRY.md`
+
+### 6.1 — Interfaces y Registry
+
+- [ ] **6.1.1** Crear `server/engines/types.ts` — `AgentEngine`, `AgentSession`, `StreamEvent`, `AgentConfig`
+- [ ] **6.1.2** Crear `server/engines/registry.ts` — `EngineRegistry.register()`, `.get()`, `.list()`
+
+### 6.2 — Pi Engine (extraer lógica actual)
+
+- [ ] **6.2.1** Crear `server/engines/pi-engine.ts` — mover `createAgentSession` desde `agent-rpc.ts`
+- [ ] **6.2.2** Adaptar subscribe de Pi al formato `StreamEvent` unificado
+
+### 6.3 — Stubs de motores nuevos
+
+- [ ] **6.3.1** `server/engines/react-engine.ts` — stub (throw not implemented)
+- [ ] **6.3.2** `server/engines/opencode-engine.ts` — stub
+- [ ] **6.3.3** `server/engines/hermes-engine.ts` — stub
+- [ ] **6.3.4** `server/engines/goose-engine.ts` — stub
+
+### 6.4 — Refactor agent-rpc.ts
+
+- [ ] **6.4.1** Registrar todos los engines al iniciar
+- [ ] **6.4.2** En `ws.on('init')`: leer `config.engine`, resolver con `EngineRegistry.get()`
+- [ ] **6.4.3** Default: `engine = 'pi'` si no está configurado
+- [ ] **6.4.4** Error 400 si el engine no existe
+
+### 6.5 — Configuración del motor por agente
+
+- [ ] **6.5.1** Agregar campo `engine` a `AgentConfig` en `agent-rpc.ts`
+- [ ] **6.5.2** Leer `engine` desde Thalamus (`agent_config.engine`)
+- [ ] **6.5.3** Leer `engine` desde archivo local (`config.json`)
+- [ ] **6.5.4** Agregar soporte en `PUT /api/agents/:id/config` (Elixir)
+
+### 6.6 — Tests
+
+- [ ] **6.6.1** Test: 2 agentes simultáneos con distinto engine
+- [ ] **6.6.2** Test: agente sin engine → usa `pi` por defecto
+- [ ] **6.6.3** Test: engine desconocido → error 400
+
+---
+
 ## Progreso
 
 | Fase | Tareas | Completadas | Estado |
@@ -242,8 +285,9 @@ export interface AgentProvider {
 | 2 — Endpoints | 12 | 0 | ⬜ Pendiente |
 | 3 — Publicación | 13 | 0 | ⬜ Pendiente |
 | 4 — Sandbox | 12 | 0 | ⬜ Pendiente |
-| 5 — Identity | 13 | 0 | ⬜ Pendiente |
-| **Total** | **65** | **0** | |
+| 5 — Identity | 15 | 0 | ⬜ Pendiente |
+| 6 — Multi-Engine | 20 | 0 | ⬜ Pendiente |
+| **Total** | **85** | **0** | |
 
 ---
 
