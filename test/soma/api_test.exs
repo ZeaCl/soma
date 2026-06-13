@@ -4,6 +4,13 @@ defmodule Soma.APITest do
   @base "http://localhost:4084/api/v1"
   @key "zs_live_bootstrap_test_key_2026"
 
+  setup do
+    # Integration tests talk to real server — use :manual sandbox mode
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Soma.Repo)
+    Ecto.Adapters.SQL.Sandbox.mode(Soma.Repo, {:shared, self()})
+    :ok
+  end
+
   test "health check" do
     {:ok, %{status: 200, body: body}} = Req.get("http://localhost:4084/health")
     assert body["status"] == "ok"
