@@ -1,0 +1,125 @@
+#!/bin/bash
+# soma-agent-useradd — crea usuario Linux para un agente
+# Usage: soma-agent-useradd <agent-id> <org-id> [teams] [mounts-json]
+# Requiere: root o sudo
+
+set -euo pipefail
+
+AGENT_ID="${1:-}"
+ORG_ID="${2:-}"
+TEAMS="${3:-}"
+MOUNTS_JSON="${4:-[]}"
+
+if [ -z "$AGENT_ID" ] || [ -z "$ORG_ID" ]; then
+  echo "Usage: soma-agent-useradd <agent-id> <org-id> [teams] [mounts-json]" >&2
+  exit 1
+fi
+
+USERNAME="soma-${AGENT_ID:0:12}"
+HOMEDIR="/home/soma/${AGENT_ID}"
+SHELL="/bin/bash"
+BOOTSTRAP="/home/soma/_bootstrap"
+
+echo "👤 Creating agent user: $USERNAME"
+echo "   Home: $HOMEDIR"
+echo "   Org:  $ORG_ID"
+echo ""
+
+# ── 1. Crear grupo primario ──────────────────────────────────────────
+if ! getent group "$USERNAME" >/dev/null 2>&1; then
+  groupadd --force "$USERNAME"
+  echo "   ✅ Group: $USERNAME"
+else
+  echo "   ⚠️  Group $USERNAME already exists — reusing"
+fi
+
+# ── 2. Crear usuario ─────────────────────────────────────────────────
+if id "$USERNAME" >/dev/null 2>&1; then
+  echo "   ⚠️  User $USERNAME already exists (uid=$(id -u "$USERNAME")) — reusing"
+else
+  # Generar UID en rango 2000-65000
+  UID_NUM=$((2000 + $(echo "$AGENT_ID" | cksum | cut -d' ' -f1) % 63000))
+  useradd \
+    --home-dir "$HOMEDIR" \
+    --shell "$SHELL" \
+    --gid "$USERNAME" \
+    --no-create-home \
+    --uid "$UID_NUM" \
+    "$USERNAME" 2>/dev/null || {
+      # Fallback: sin UID específico
+      useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --no-create-home "$USERNAME"
+    }
+  echo "   ✅ User created: uid=$(id -u "$USERNAME")"
+fi
+
+# ── 3. Agregar a grupos ──────────────────────────────────────────────
+# Grupo global de agentes
+groupadd --force soma-agents 2>/dev/null || true
+usermod -aG soma-agents "$USERNAME"
+
+# Grupo de la organización
+groupadd --force "org-${ORG_ID}" 2>/dev/null || true
+usermod -aG "org-${ORG_ID}" "$USERNAME"
+
+# Grupos de equipos
+if [ -n "$TEAMS" ]; then
+  for team in $(echo "$TEAMS" | tr ',' ' '); do
+    groupadd --force "team-${team}" 2>/dev/null || true
+    usermod -aG "team-${team}" "$USERNAME"
+  done
+fi
+
+echo "   ✅ Groups: $(groups "$USERNAME" | cut -d: -f2)"
+
+# ── 4. Crear home directory ───────────────────────────────────────────
+mkdir -p "$HOMEDIR/workspace"
+mkdir -p "$HOMEDIR/.config"
+mkdir -p "$HOMEDIR/.pi-sessions"
+
+# Copiar templates base si existen
+if [ -d "$BOOTSTRAP" ]; then
+  cp "$BOOTSTRAP/.bashrc" "$HOMEDIR/" 2>/dev/null || true
+  cp "$BOOTSTRAP/.gitconfig" "$HOMEDIR/" 2>/dev/null || true
+fi
+
+# ── 5. Permisos ──────────────────────────────────────────────────────
+chown -R "$USERNAME:$USERNAME" "$HOMEDIR"
+chmod 700 "$HOMEDIR"
+chmod 700 "$HOMEDIR/workspace"
+
+echo "   ✅ Permissions: $(stat -c '%a %U:%G' "$HOMEDIR")"
+
+# ── 6. Montar volúmenes compartidos ──────────────────────────────────
+echo "$MOUNTS_JSON" | python3 -c "
+import sys, json, subprocess, os
+
+try:
+    mounts = json.load(sys.stdin) if isinstance(sys.stdin, str) else json.loads(sys.stdin.read())
+except:
+    mounts = []
+
+for m in mounts if isinstance(mounts, list) else []:
+    source = m.get('source', '')
+    dest = m.get('dest', 'shared')
+    ro = m.get('ro', False)
+
+    if not source or not os.path.exists(source):
+        print(f'   ⚠️  Mount source not found: {source} — skipping')
+        continue
+
+    target = f'$HOMEDIR/{dest}'
+    os.makedirs(target, exist_ok=True)
+
+    opts = 'bind'
+    if ro: opts += ',ro'
+
+    try:
+        subprocess.run(['mount', '--bind', '-o', opts, source, target], check=True)
+        print(f'   ✅ Mount: {source} → {target} {\"(ro)\" if ro else \"(rw)\"}')
+    except subprocess.CalledProcessError as e:
+        print(f'   ⚠️  Mount failed: {e} — continuing')
+" 2>/dev/null || echo "   ⚠️  Mount processing failed — continuing without mounts"
+
+echo ""
+echo "✅ Agent user ready: $USERNAME"
+echo "   uid=$(id -u "$USERNAME") home=$HOMEDIR groups=$(groups "$USERNAME" | cut -d: -f2)"

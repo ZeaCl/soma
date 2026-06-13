@@ -1,0 +1,58 @@
+#!/bin/bash
+# soma-agent-userdel — destruye usuario Linux de un agente
+# Usage: soma-agent-userdel <agent-id>
+# Requiere: root o sudo
+
+set -euo pipefail
+
+AGENT_ID="${1:-}"
+
+if [ -z "$AGENT_ID" ]; then
+  echo "Usage: soma-agent-userdel <agent-id>" >&2
+  exit 1
+fi
+
+USERNAME="soma-${AGENT_ID:0:12}"
+HOMEDIR="/home/soma/${AGENT_ID}"
+
+echo "🗑️  Destroying agent user: $USERNAME"
+
+# ── 1. Verificar que existe ──────────────────────────────────────────
+if ! id "$USERNAME" >/dev/null 2>&1; then
+  echo "   ⚠️  User $USERNAME does not exist — nothing to destroy"
+  exit 0
+fi
+
+# ── 2. Desmontar bind mounts ────────────────────────────────────────
+if [ -d "$HOMEDIR" ]; then
+  echo "   Unmounting bind mounts under $HOMEDIR..."
+  mount | grep "$HOMEDIR" | awk '{print $3}' | while read -r mp; do
+    umount "$mp" 2>/dev/null && echo "   ✅ Unmounted: $mp" || echo "   ⚠️  Could not unmount: $mp"
+  done
+fi
+
+# ── 3. Matar procesos del usuario ────────────────────────────────────
+pkill -u "$USERNAME" 2>/dev/null || true
+echo "   ✅ Processes killed"
+
+# ── 4. Borrar usuario y home ─────────────────────────────────────────
+userdel -r "$USERNAME" 2>/dev/null && echo "   ✅ User deleted with home" || {
+  # Fallback: borrar manualmente si userdel -r falla
+  userdel "$USERNAME" 2>/dev/null || true
+  rm -rf "$HOMEDIR" 2>/dev/null || true
+  echo "   ✅ User + home removed (fallback)"
+}
+
+# ── 5. Verificar ─────────────────────────────────────────────────────
+if id "$USERNAME" >/dev/null 2>&1; then
+  echo "❌ User still exists after deletion attempt"
+  exit 1
+fi
+
+if [ -d "$HOMEDIR" ]; then
+  echo "❌ Home directory still exists: $HOMEDIR"
+  exit 1
+fi
+
+echo ""
+echo "✅ Agent user destroyed: $AGENT_ID"
