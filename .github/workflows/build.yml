@@ -22,3 +22,7 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker push ${{ env.IMAGE }}:latest
+      - name: Make public
+        run: |
+          gh api /orgs/ZeaCl/packages/container/${{ env.IMAGE_NAME }}/visibility \
+            -X PATCH -f visibility=public || true
