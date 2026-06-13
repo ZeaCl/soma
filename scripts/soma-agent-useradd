@@ -25,9 +25,22 @@ echo "   Home: $HOMEDIR"
 echo "   Org:  $ORG_ID"
 echo ""
 
+# ── Detect Alpine vs GNU ──────────────────────────────────────────
+if [ -f /etc/alpine-release ]; then
+  GROUPADD="addgroup"
+  USERADD="adduser -D -s $SHELL"
+  USERMOD="addgroup"  # Alpine: addgroup user group
+  IS_ALPINE=true
+else
+  GROUPADD="groupadd --force"
+  USERADD="useradd --home-dir $HOMEDIR --shell $SHELL --no-create-home"
+  USERMOD="usermod -aG"
+  IS_ALPINE=false
+fi
+
 # ── 1. Crear grupo primario ──────────────────────────────────────────
 if ! getent group "$USERNAME" >/dev/null 2>&1; then
-  groupadd --force "$USERNAME"
+  $GROUPADD "$USERNAME"
   echo "   ✅ Group: $USERNAME"
 else
   echo "   ⚠️  Group $USERNAME already exists — reusing"
@@ -37,35 +50,40 @@ fi
 if id "$USERNAME" >/dev/null 2>&1; then
   echo "   ⚠️  User $USERNAME already exists (uid=$(id -u "$USERNAME")) — reusing"
 else
-  # Generar UID en rango 2000-65000
-  UID_NUM=$((2000 + $(echo "$AGENT_ID" | cksum | cut -d' ' -f1) % 63000))
-  useradd \
-    --home-dir "$HOMEDIR" \
-    --shell "$SHELL" \
-    --gid "$USERNAME" \
-    --no-create-home \
-    --uid "$UID_NUM" \
-    "$USERNAME" 2>/dev/null || {
-      # Fallback: sin UID específico
+  if [ "$IS_ALPINE" = true ]; then
+    adduser -D -s "$SHELL" -h "$HOMEDIR" -G "$USERNAME" "$USERNAME"
+  else
+    UID_NUM=$((2000 + $(echo "$AGENT_ID" | cksum | cut -d' ' -f1) % 63000))
+    useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --no-create-home --uid "$UID_NUM" "$USERNAME" 2>/dev/null || {
       useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --no-create-home "$USERNAME"
     }
+  fi
   echo "   ✅ User created: uid=$(id -u "$USERNAME")"
 fi
 
 # ── 3. Agregar a grupos ──────────────────────────────────────────────
-# Grupo global de agentes
-groupadd --force soma-agents 2>/dev/null || true
-usermod -aG soma-agents "$USERNAME"
+$GROUPADD soma-agents 2>/dev/null || true
+if [ "$IS_ALPINE" = true ]; then
+  addgroup "$USERNAME" soma-agents 2>/dev/null || true
+else
+  usermod -aG soma-agents "$USERNAME"
+fi
 
-# Grupo de la organización
-groupadd --force "org-${ORG_ID}" 2>/dev/null || true
-usermod -aG "org-${ORG_ID}" "$USERNAME"
+$GROUPADD "org-${ORG_ID}" 2>/dev/null || true
+if [ "$IS_ALPINE" = true ]; then
+  addgroup "$USERNAME" "org-${ORG_ID}" 2>/dev/null || true
+else
+  usermod -aG "org-${ORG_ID}" "$USERNAME"
+fi
 
-# Grupos de equipos
 if [ -n "$TEAMS" ]; then
   for team in $(echo "$TEAMS" | tr ',' ' '); do
-    groupadd --force "team-${team}" 2>/dev/null || true
-    usermod -aG "team-${team}" "$USERNAME"
+    $GROUPADD "team-${team}" 2>/dev/null || true
+    if [ "$IS_ALPINE" = true ]; then
+      addgroup "$USERNAME" "team-${team}" 2>/dev/null || true
+    else
+      usermod -aG "team-${team}" "$USERNAME"
+    fi
   done
 fi
 

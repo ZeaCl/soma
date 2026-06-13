@@ -32,16 +32,29 @@ if [ -d "$HOMEDIR" ]; then
 fi
 
 # ── 3. Matar procesos del usuario ────────────────────────────────────
-pkill -u "$USERNAME" 2>/dev/null || true
-echo "   ✅ Processes killed"
+if command -v pkill >/dev/null 2>&1; then
+  pkill -u "$USERNAME" 2>/dev/null || true
+  echo "   ✅ Processes killed"
+else
+  # Alpine: kill processes manually
+  ps aux 2>/dev/null | grep "^$USERNAME" | awk '{print $2}' | xargs kill 2>/dev/null || true
+  echo "   ✅ Processes killed"
+fi
 
 # ── 4. Borrar usuario y home ─────────────────────────────────────────
-userdel -r "$USERNAME" 2>/dev/null && echo "   ✅ User deleted with home" || {
-  # Fallback: borrar manualmente si userdel -r falla
-  userdel "$USERNAME" 2>/dev/null || true
-  rm -rf "$HOMEDIR" 2>/dev/null || true
-  echo "   ✅ User + home removed (fallback)"
-}
+if [ -f /etc/alpine-release ]; then
+  deluser --remove-home "$USERNAME" 2>/dev/null && echo "   ✅ User deleted with home" || {
+    deluser "$USERNAME" 2>/dev/null || true
+    rm -rf "$HOMEDIR" 2>/dev/null || true
+    echo "   ✅ User + home removed (fallback)"
+  }
+else
+  userdel -r "$USERNAME" 2>/dev/null && echo "   ✅ User deleted with home" || {
+    userdel "$USERNAME" 2>/dev/null || true
+    rm -rf "$HOMEDIR" 2>/dev/null || true
+    echo "   ✅ User + home removed (fallback)"
+  }
+fi
 
 # ── 5. Verificar ─────────────────────────────────────────────────────
 if id "$USERNAME" >/dev/null 2>&1; then
