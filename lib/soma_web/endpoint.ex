@@ -5,5 +5,6 @@ defmodule SomaWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
   plug Plug.Parsers, parsers: [:json], json_decoder: Jason
+  plug Plug.Static, at: "/", from: :soma, gzip: false, only: ~w(index.html assets favicon.ico zea-design.css icono-zea.svg text-zea.svg)
   plug SomaWeb.Router
 end

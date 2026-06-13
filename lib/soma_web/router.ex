@@ -19,4 +19,23 @@ defmodule SomaWeb.Router do
   forward "/api/api-keys", to: SomaWeb.Plugs.AuthRouter
   forward "/api/agents", to: SomaWeb.Plugs.AuthRouter
   forward "/api/upload", to: SomaWeb.Plugs.AuthRouter
+
+  # Serve SPA index.html for root and any non-API path
+  get "/" do
+    serve_index(conn)
+  end
+
+  match _ do
+    serve_index(conn)
+  end
+
+  defp serve_index(conn) do
+    index_path = Path.join(:code.priv_dir(:soma), "static/index.html")
+    case File.read(index_path) do
+      {:ok, html} ->
+        conn |> put_resp_content_type("text/html") |> send_resp(200, html)
+      {:error, _} ->
+        send_resp(conn, 404, "Not found")
+    end
+  end
 end
