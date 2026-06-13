@@ -27,6 +27,7 @@ COPY server/package.json /app/server/package.json
 WORKDIR /app/server
 RUN npm install --omit=dev 2>/dev/null || true
 COPY server/agent-rpc.ts /app/server/agent-rpc.ts
+COPY server/engines/ /app/server/engines/
 WORKDIR /app
 
 COPY start.sh /start.sh

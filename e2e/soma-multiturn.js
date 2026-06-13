@@ -62,7 +62,7 @@ function check(condition, label) {
 
     // Click Get Started
     console.log('2. Get Started → Login');
-    await page.locator('button').filter({ hasText: /Launch|Get Started|Sign in/ }).first().click();
+    await page.locator('button').filter({ hasText: /Launch|Get Started|Sign in|AgentHub/ }).first().click();
     await page.waitForTimeout(3000);
 
     // Login if needed
