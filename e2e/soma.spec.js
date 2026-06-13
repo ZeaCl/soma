@@ -26,7 +26,7 @@ async function shot(page, name) {
 
     // 2. Click Get Started
     console.log('2️⃣  Get Started');
-    await page.locator('button').filter({ hasText: /Launch|Get Started|Sign in|AgentHub/ }).first().click();
+    await page.locator('button').filter({ hasText: /Launch|Get Started|AgentHub|Sign in|AgentHub/ }).first().click();
     await page.waitForTimeout(3000);
 
     // 3. Login if needed

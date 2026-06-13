@@ -23,7 +23,7 @@ async function shot(page, name) {
     await shot(page, '01-landing.png');
     console.log('1. Landing');
     
-    await page.locator('button').filter({ hasText: /Launch|Get Started/ }).first().click();
+    await page.locator('button').filter({ hasText: /Launch|Get Started|AgentHub/ }).first().click();
     await page.waitForTimeout(3000);
     
     // 2. Login
