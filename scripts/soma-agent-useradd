@@ -89,10 +89,20 @@ _mount_bind() {
   local src="$1" dst="$2" ro="$3"
   [ ! -d "$src" ] && { echo "   ⚠️  Source not found: $src — skipping"; return; }
   mkdir -p "$dst"
-  if [ "$ro" = "true" ]; then
-    mount --bind -o ro "$src" "$dst" 2>/dev/null && echo "   ✅ Mount: $src → $dst (ro)" || echo "   ⚠️  Mount failed: $src (ro)"
+  if mount --bind "$src" "$dst" 2>/dev/null; then
+    if [ "$ro" = "true" ]; then
+      if mount -o remount,ro,bind "$dst" 2>/dev/null; then
+        echo "   ✅ Mount: $src → $dst (ro)"
+      else
+        # overlayfs fallback: ensure source is not writable by agent users
+        echo "   ⚠️  Mount: $src → $dst (rw, remount ro not supported on this fs)"
+        echo "   → Ensure source permissions prevent writes (chown root:root $src)"
+      fi
+    else
+      echo "   ✅ Mount: $src → $dst (rw)"
+    fi
   else
-    mount --bind "$src" "$dst" 2>/dev/null && echo "   ✅ Mount: $src → $dst (rw)" || echo "   ⚠️  Mount failed: $src"
+    echo "   ⚠️  Mount failed: $src"
   fi
 }
 
