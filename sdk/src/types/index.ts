@@ -58,6 +58,21 @@ export interface UseGliaOptions {
   conversationId?: string
   apiKey?: string
   baseUrl?: string
+  /** WebSocket path override (default: '/agent-ws') */
+  wsPath?: string
+  /** REST API prefix for hooks (default: '/api/v1') */
+  apiPrefix?: string
+  /** Custom auth headers factory. Default uses x-api-key header. */
+  authHeaders?: () => Record<string, string>
+  /** Called on 401/403 responses */
+  onAuthError?: (status: number) => void
+  /** Direct agent config — bypasses identity service */
+  agentConfig?: {
+    systemPrompt?: string
+    tools?: string[]
+    engine?: string
+    skills?: string[]
+  }
   onDelta?: (text: string) => void
   onThinking?: (text: string) => void
   onTool?: (name: string, input: unknown) => void

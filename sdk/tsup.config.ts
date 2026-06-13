@@ -1,4 +1,6 @@
 import { defineConfig } from 'tsup'
+import { copyFileSync, mkdirSync } from 'fs'
+import { join } from 'path'
 
 export default defineConfig({
   entry: {
@@ -13,4 +15,10 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   external: ['react', 'react-dom'],
+  async onSuccess() {
+    // Copy standalone CSS to dist
+    mkdirSync(join(__dirname, 'dist', 'styles'), { recursive: true })
+    copyFileSync(join(__dirname, 'src', 'styles', 'base.css'), join(__dirname, 'dist', 'styles', 'base.css'))
+    console.log('📄 CSS copied to dist/styles/base.css')
+  },
 })

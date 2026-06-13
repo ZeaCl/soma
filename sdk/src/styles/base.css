@@ -1,0 +1,66 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Glia Base CSS — Standalone theme tokens for @zea/soma-sdk
+
+   Import this file to use GliaChat without zea-design.css.
+   Override any token by setting the CSS variable on .glia-root or a parent.
+
+   Usage:
+     import '@zea/soma-sdk/styles/base.css'
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.glia-root {
+  /* Background & Text */
+  --glia-bg: #0d1117;
+  --glia-text: #e6edf3;
+  --glia-text-muted: #8b949e;
+
+  /* Bubbles */
+  --glia-user-bubble: #238636;
+  --glia-user-text: #ffffff;
+  --glia-agent-bubble: #21262d;
+  --glia-agent-text: #e6edf3;
+
+  /* Thinking */
+  --glia-thinking-bg: rgba(139, 92, 246, 0.08);
+  --glia-thinking-text: #a78bfa;
+  --glia-thinking-border: rgba(139, 92, 246, 0.2);
+
+  /* Tools */
+  --glia-tool-bg: rgba(139, 92, 246, 0.1);
+  --glia-tool-text: #a78bfa;
+  --glia-tool-border: rgba(139, 92, 246, 0.2);
+
+  /* Tool results */
+  --glia-result-bg: rgba(16, 185, 129, 0.1);
+  --glia-result-text: #6ee7b7;
+  --glia-result-border: rgba(16, 185, 129, 0.25);
+
+  /* Input */
+  --glia-input-bg: #161b22;
+  --glia-input-border: #30363d;
+
+  /* Primary action */
+  --glia-primary: #238636;
+  --glia-primary-text: #ffffff;
+
+  /* Code */
+  --glia-code-bg: #161b22;
+
+  /* Typography */
+  --glia-font: system-ui, -apple-system, "Segoe UI", Roboto, "Google Sans", sans-serif;
+  --glia-radius: 12px;
+}
+
+/* Keyframes */
+@keyframes glia-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Inline code */
+.glia-code {
+  background: var(--glia-code-bg, #161b22);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}

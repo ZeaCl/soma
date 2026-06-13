@@ -4,10 +4,16 @@ export { useGliaConversations, useGliaFiles, useGliaSkills, useGliaAgents } from
 
 // Components
 export { GliaChat } from './components/GliaChat'
+export type { GliaChatProps, GliaChatColors, GliaChatMessage } from './components/GliaChat'
 export { GliaCopilot } from './components/GliaCopilot'
 export { GliaConversationList } from './components/GliaConversationList'
 export { GliaFileBrowser } from './components/GliaFileBrowser'
 export { GliaSkillEditor } from './components/GliaSkillEditor'
+
+// Sandbox providers
+export { createRestSandboxProvider } from './sandbox/rest-provider'
+export { createMemorySandboxProvider } from './sandbox/memory-provider'
+export type { SandboxProvider, SandboxFile } from './sandbox/types'
 
 // Types
 export type {

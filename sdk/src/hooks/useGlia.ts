@@ -25,8 +25,8 @@ export function useGlia(options: UseGliaOptions): UseGliaReturn {
   const streamRef = useRef('')
 
   const wsUrl = baseUrl
-    ? `${baseUrl.replace('http', 'ws')}/agent-ws`
-    : `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost'}/agent-ws`
+    ? `${baseUrl.replace('http', 'ws')}${options.wsPath || '/agent-ws'}`
+    : `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost'}${options.wsPath || '/agent-ws'}`
 
   const contentRef = useRef('')
   const thinkingRef = useRef('')

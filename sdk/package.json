@@ -18,9 +18,11 @@
     "./hooks": {
       "import": "./dist/hooks/index.mjs",
       "types": "./dist/hooks/index.d.ts"
-    }
+    },
+    "./styles/base.css": "./dist/styles/base.css"
   },
   "files": ["dist"],
+  "keywords": ["ai", "agent", "chat", "react", "websocket", "llm"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"
