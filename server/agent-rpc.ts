@@ -431,6 +431,58 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data))
 }
 
+// ── Skills registry (module scope — shared by HTTP + watcher) ──────────────
+
+function getSkillAgents(skillName: string): string[] {
+  const regPath = join(SKILLS_CUSTOM_DIR, '.registry.json')
+  try {
+    if (existsSync(regPath)) {
+      const reg = JSON.parse(readFileSync(regPath, 'utf-8'))
+      return reg[skillName] || []
+    }
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveSkillAgents(skillName: string, agentIds: string[]) {
+  const regPath = join(SKILLS_CUSTOM_DIR, '.registry.json')
+  if (!existsSync(SKILLS_CUSTOM_DIR)) mkdirSync(SKILLS_CUSTOM_DIR, { recursive: true })
+  let reg: Record<string, string[]> = {}
+  try {
+    if (existsSync(regPath)) reg = JSON.parse(readFileSync(regPath, 'utf-8'))
+  } catch { /* ignore */ }
+  reg[skillName] = agentIds.filter(Boolean)
+  writeFileSync(regPath, JSON.stringify(reg, null, 2))
+}
+
+function listAllSkills(): Array<{ name: string; description: string; agents: string[]; custom: boolean }> {
+  const skills: Array<{ name: string; description: string; agents: string[]; custom: boolean }> = []
+  function scanDir(dir: string, custom: boolean) {
+    if (!existsSync(dir)) return
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+      const mdPath = join(dir, entry.name, 'SKILL.md')
+      if (!existsSync(mdPath)) continue
+      if (skills.some(s => s.name === entry.name)) continue
+      const content = readFileSync(mdPath, 'utf-8')
+      const descMatch = content.match(/description:\s*(.+)/i)
+      const description = descMatch?.[1]?.trim() || content.split('\n').find(l => l && !l.startsWith('#') && !l.startsWith('---'))?.slice(0, 120) || ''
+      skills.push({ name: entry.name, description, agents: getSkillAgents(entry.name), custom })
+    }
+  }
+  scanDir(SKILLS_DIR, false)
+  scanDir(SKILLS_CUSTOM_DIR, true)
+  return skills
+}
+
+function findSkillPath(name: string): string | null {
+  const customPath = join(SKILLS_CUSTOM_DIR, name, 'SKILL.md')
+  if (existsSync(customPath)) return customPath
+  const builtinPath = join(SKILLS_DIR, name, 'SKILL.md')
+  if (existsSync(builtinPath)) return builtinPath
+  return null
+}
+
 const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -499,56 +551,6 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   }
 
   // ── Skills API ──────────────────────────────────────────────────────────
-
-  function getSkillAgents(skillName: string): string[] {
-    const regPath = join(SKILLS_CUSTOM_DIR, '.registry.json')
-    try {
-      if (existsSync(regPath)) {
-        const reg = JSON.parse(readFileSync(regPath, 'utf-8'))
-        return reg[skillName] || []
-      }
-    } catch { /* ignore */ }
-    return []
-  }
-
-  function saveSkillAgents(skillName: string, agentIds: string[]) {
-    const regPath = join(SKILLS_CUSTOM_DIR, '.registry.json')
-    if (!existsSync(SKILLS_CUSTOM_DIR)) mkdirSync(SKILLS_CUSTOM_DIR, { recursive: true })
-    let reg: Record<string, string[]> = {}
-    try {
-      if (existsSync(regPath)) reg = JSON.parse(readFileSync(regPath, 'utf-8'))
-    } catch { /* ignore */ }
-    reg[skillName] = agentIds.filter(Boolean)
-    writeFileSync(regPath, JSON.stringify(reg, null, 2))
-  }
-
-  function listAllSkills(): Array<{ name: string; description: string; agents: string[]; custom: boolean }> {
-    const skills: Array<{ name: string; description: string; agents: string[]; custom: boolean }> = []
-    function scanDir(dir: string, custom: boolean) {
-      if (!existsSync(dir)) return
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-        const mdPath = join(dir, entry.name, 'SKILL.md')
-        if (!existsSync(mdPath)) continue
-        if (skills.some(s => s.name === entry.name)) continue // custom overrides built-in
-        const content = readFileSync(mdPath, 'utf-8')
-        const descMatch = content.match(/description:\s*(.+)/i)
-        const description = descMatch?.[1]?.trim() || content.split('\n').find(l => l && !l.startsWith('#') && !l.startsWith('---'))?.slice(0, 120) || ''
-        skills.push({ name: entry.name, description, agents: getSkillAgents(entry.name), custom })
-      }
-    }
-    scanDir(SKILLS_DIR, false)
-    scanDir(SKILLS_CUSTOM_DIR, true)
-    return skills
-  }
-
-  function findSkillPath(name: string): string | null {
-    const customPath = join(SKILLS_CUSTOM_DIR, name, 'SKILL.md')
-    if (existsSync(customPath)) return customPath
-    const builtinPath = join(SKILLS_DIR, name, 'SKILL.md')
-    if (existsSync(builtinPath)) return builtinPath
-    return null
-  }
 
   // GET /api/skills
   if (url === '/api/skills' && req.method === 'GET') {

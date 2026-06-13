@@ -5,9 +5,18 @@ echo "🧠 Starting Soma..."
 echo "   Elixir API: :4084"
 echo "   Pi Sidecar: :3002"
 
-# Start Pi sidecar in background
-cd /app/server
-npx tsx agent-rpc.ts &
+# Start Pi sidecar with auto-restart
+start_pi() {
+  cd /app/server
+  while true; do
+    echo "🚀 Starting Agent RPC..."
+    npx tsx agent-rpc.ts 2>&1
+    echo "⚠️  Agent RPC exited (code $?). Restarting in 3s..."
+    sleep 3
+  done
+}
+
+start_pi &
 PI_PID=$!
 
 # Start Soma Elixir app
