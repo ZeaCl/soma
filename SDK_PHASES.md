@@ -287,7 +287,8 @@ export interface AgentProvider {
 | 4 — Sandbox | 12 | 0 | ⬜ Pendiente |
 | 5 — Identity | 15 | 0 | ⬜ Pendiente |
 | 6 — Multi-Engine | 20 | 0 | ⬜ Pendiente |
-| **Total** | **85** | **0** | |
+| 7 — OS Sandboxes | 10 | 0 | ⬜ Pendiente |
+| **Total** | **95** | **0** | |
 
 ---
 
