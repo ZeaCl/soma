@@ -3,6 +3,7 @@ interface LandingProps { onLogin: () => void; error?: string }
 const muted = 'color-mix(in oklch, var(--zea-bc) 50%, transparent)'
 const subtle = 'color-mix(in oklch, var(--zea-bc) 35%, transparent)'
 const border = '1px solid color-mix(in oklch, white 5%, transparent)'
+const borderTop = border
 
 export default function Landing({ onLogin, error }: LandingProps) {
   return (
