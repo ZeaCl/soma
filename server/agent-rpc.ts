@@ -1,11 +1,11 @@
 /**
- * Agent RPC WebSocket — Pi SDK directo, sin Synapse, sin HTTP/SSE.
+ * Agent RPC WebSocket — Multi-engine agent runtime.
  *
- * Corre en :3002, independiente del pi-backend.ts (:3001).
- * Usa createAgentSession() directo del SDK, con compaction,
- * skills desde Thalamus, y system prompt dinámico.
+ * Corre en :3002. Usa EngineRegistry para rutear agentes a su motor
+ * (Pi, ReAct, OpenCode, Hermes, Goose). Skills desde Thalamus,
+ * system prompt dinámico, OS-level sandbox.
  *
- * Para probar: ws://sudlich.zea.localhost/agent-ws
+ * Para probar: ws://soma.zea.localhost/agent-ws
  */
 
 import { WebSocketServer, WebSocket } from 'ws'
@@ -15,11 +15,25 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 import {
   AuthStorage,
-  createAgentSession,
   ModelRegistry,
-  SessionManager,
   DefaultResourceLoader,
 } from '@earendil-works/pi-coding-agent'
+
+// ── Engine Registry ──────────────────────────────────────────────────
+import { EngineRegistry } from './engines/registry'
+import { PiEngine } from './engines/pi-engine'
+import { ReActEngine } from './engines/react-engine'
+import { OpenCodeEngine } from './engines/opencode-engine'
+import { HermesEngine } from './engines/hermes-engine'
+import { GooseEngine } from './engines/goose-engine'
+import type { AgentConfig as EngineAgentConfig, AgentSession } from './engines/types'
+
+// Register available engines at startup
+EngineRegistry.register('pi', PiEngine)
+EngineRegistry.register('react', ReActEngine)
+EngineRegistry.register('opencode', OpenCodeEngine)
+EngineRegistry.register('hermes', HermesEngine)
+EngineRegistry.register('goose', GooseEngine)
 
 const PORT = parseInt(process.env.AGENT_RPC_PORT || '3002', 10)
 const SESSION_DIR = process.env.PI_SESSION_DIR || '/app/.pi-agent-sessions'
@@ -84,6 +98,7 @@ interface AgentConfig {
   resourceLoader: ReturnType<typeof DefaultResourceLoader>
   zeaToken: string
   workspacePaths: string[]
+  engine?: string  // 'pi' | 'react' | 'opencode' | 'hermes' | 'goose'
 }
 
 const configCache = new Map<string, AgentConfig>()
@@ -180,12 +195,13 @@ async function fetchAgentConfig(userId: string): Promise<AgentConfig | null> {
         const skillPaths = resolveSkillPaths(skillNames)
         const systemPrompt = user.agent_config?.system_prompt || null
         const workspacePaths = user.agent_config?.workspace_paths || []
+        const engine = user.agent_config?.engine || 'pi'
         const zeaToken = await fetchZeaToken(resolvedId)
         const resourceLoader = createResourceLoader(skillPaths)
         await resourceLoader.reload()
 
-        console.log(`☁️  Config desde Thalamus: ${skillPaths.length} skills, prompt=${!!systemPrompt}`)
-        return { systemPrompt, skillPaths, resourceLoader, zeaToken, workspacePaths }
+        console.log(`☁️  Config desde Thalamus: ${skillPaths.length} skills, prompt=${!!systemPrompt}, engine=${engine}`)
+        return { systemPrompt, skillPaths, resourceLoader, zeaToken, workspacePaths, engine }
       }
     }
   } catch (err) {
@@ -206,6 +222,7 @@ async function fetchAgentConfig(userId: string): Promise<AgentConfig | null> {
       resourceLoader,
       zeaToken: '',
       workspacePaths: fileConfig?.workspacePaths || [],
+      engine: 'pi',
     }
   }
 
@@ -706,7 +723,7 @@ wss.on('connection', (ws: WebSocket) => {
 
   let userId = ''
   let conversationId = ''
-  let session: Awaited<ReturnType<typeof createAgentSession>>['session'] | null = null
+  let session: AgentSession | null = null
   let assistantContent = ''
   let assistantThinking = ''
   let promptAborted = false
@@ -723,78 +740,96 @@ wss.on('connection', (ws: WebSocket) => {
 
     const { type, text, uid, cid } = json
 
-    // Init: set user + conversation IDs, load config
+    // Init: load agent config → resolve engine → create session
     if (type === 'init') {
       userId = uid || ''
       conversationId = cid || ''
-      activeAgentId = userId // track for skill auto-registration
+      activeAgentId = userId
       assistantContent = ''
       assistantThinking = ''
       assistantTools.length = 0
       promptAborted = false
-      // Force config reload if skills changed
+
       const configChanged = skillsVersion > 0
       if (configChanged) configCache.delete(userId)
       const config = await getAgentConfig(userId)
       console.log(`🔧 Init: user=${userId} conv=${conversationId} config=${!!config}`)
 
-      if (config?.zeaToken) process.env.ZEA_TOKEN = config.zeaToken
+      if (!config) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Agent config not found' }))
+        return
+      }
+
+      if (config.zeaToken) process.env.ZEA_TOKEN = config.zeaToken
+
+      // Resolve engine
+      const engineName = config.engine || 'pi'
+      const engine = EngineRegistry.get(engineName)
+      if (!engine) {
+        ws.send(JSON.stringify({ type: 'error', message: `Unknown engine: ${engineName}` }))
+        console.error(`❌ Unknown engine: ${engineName}`)
+        return
+      }
+
+      console.log(`🔧 Init: user=${userId} engine=${engineName} conv=${conversationId}`)
 
       const sessionKey = conversationId || userId || 'rpc-default'
       const dir = join(SESSION_DIR, sessionKey)
 
-      // If skills changed, clear old session to force fresh start with new skills
       if (configChanged && existsSync(dir)) {
-        try {
-          rmSync(dir, { recursive: true, force: true })
-          console.log(`🧹 Sesión antigua eliminada (skills cambiaron)`)
-        } catch { /* ignore */ }
+        try { rmSync(dir, { recursive: true, force: true }) } catch {}
       }
-
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 
-      const sm = SessionManager.continueRecent(process.cwd(), dir)
-
       try {
-        const result = await createAgentSession({
-          sessionManager: sm,
-          authStorage,
-          modelRegistry,
+        session = await engine.createSession({
+          systemPrompt: config.systemPrompt,
+          skillPaths: config.skillPaths,
           tools: ['read', 'bash', 'edit', 'write'],
-          ...(config?.resourceLoader ? { resourceLoader: config.resourceLoader } : {}),
-          ...(config?.systemPrompt ? { systemPromptOverride: config.systemPrompt } : {}),
+          workspacePaths: config.workspacePaths,
+          sessionDir: dir,
+          modelRegistry,
+          authStorage,
+          ...(config.resourceLoader ? { resourceLoader: config.resourceLoader } : {}),
         })
-        session = result.session
-        console.log(`✅ Sesión lista`)
+        console.log(`✅ Sesión lista (${engineName})`)
 
-        // Subscribe to events → forward to client
-        session.subscribe((event: any) => {
-          if (event.type === 'message_update') {
-            const msg = event.assistantMessageEvent
-            if (msg.type === 'text_delta') {
-              assistantContent += msg.delta
-              ws.send(JSON.stringify({ type: 'delta', text: msg.delta }))
-            } else if (msg.type === 'thinking_delta') {
-              assistantThinking += msg.delta
-              ws.send(JSON.stringify({ type: 'thinking', text: msg.delta }))
-            } else if (msg.type === 'thinking_start') {
+        // Subscribe — unified StreamEvent format
+        session.subscribe((event) => {
+          switch (event.type) {
+            case 'thinking_start':
               ws.send(JSON.stringify({ type: 'thinking_start' }))
-            } else if (msg.type === 'thinking_end') {
+              break
+            case 'thinking':
+              assistantThinking += event.text
+              ws.send(JSON.stringify({ type: 'thinking', text: event.text }))
+              break
+            case 'thinking_end':
               ws.send(JSON.stringify({ type: 'thinking_end' }))
-            } else if (msg.type === 'tool_use') {
-              assistantTools.push({ name: msg.name, input: msg.input })
-              ws.send(JSON.stringify({ type: 'tool', name: msg.name, input: msg.input }))
-            } else if (msg.type === 'tool_result') {
+              break
+            case 'delta':
+              assistantContent += event.text
+              ws.send(JSON.stringify({ type: 'delta', text: event.text }))
+              break
+            case 'tool_use':
+              assistantTools.push({ name: event.name, input: event.input })
+              ws.send(JSON.stringify({ type: 'tool', name: event.name, input: event.input }))
+              break
+            case 'tool_result':
               const lastTool = assistantTools[assistantTools.length - 1]
-              if (lastTool) lastTool.result = msg.content
-              ws.send(JSON.stringify({ type: 'tool_result', content: msg.content }))
-            }
+              if (lastTool) lastTool.result = event.content
+              ws.send(JSON.stringify({ type: 'tool_result', content: event.content }))
+              break
+            case 'error':
+              ws.send(JSON.stringify({ type: 'error', message: event.message }))
+              break
+            // 'done' is handled after prompt resolves
           }
         })
 
         ws.send(JSON.stringify({ type: 'ready' }))
       } catch (err: any) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Session init failed: ' + err.message }))
+        ws.send(JSON.stringify({ type: 'error', message: `Session init failed (${engineName}): ${err.message}` }))
       }
       return
     }
