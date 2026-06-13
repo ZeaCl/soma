@@ -1,0 +1,101 @@
+#!/bin/bash
+# soma-agent — CLI for Soma AgentHub
+# Usage: soma-agent <command> [args...]
+# Docs: openspec/soma-agenthub/03-tasks.md
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMMANDS_DIR="$SCRIPT_DIR/commands"
+
+# Config
+SOMA_API="${SOMA_API_URL:-http://soma.zea.localhost}"
+SOMA_KEY="${SOMA_API_KEY:-}"
+CONFIG_FILE="${HOME}/.soma/config"
+JSON_OUTPUT=false
+
+# Load saved auth
+if [ -f "$CONFIG_FILE" ]; then
+  source "$CONFIG_FILE" 2>/dev/null || true
+fi
+
+# ── Help ──────────────────────────────────────────────────────────────────
+
+usage() {
+  cat <<EOF
+🧠 Soma AgentHub CLI
+
+Usage: soma-agent <command> [args...]
+
+Commands:
+  agent          Manage agents (create, list, config, sandbox, destroy)
+  skill          Manage skills (list, create, assign)
+  workspace      Manage files (list, upload, download)
+  engine         List available AI engines
+  conversation   Manage conversations (list, chat)
+  doctor         Run health checks
+  auth           Authentication (login, logout, whoami, token)
+
+Options:
+  --json         Machine-readable JSON output
+  --help         Show this help
+
+Environment:
+  SOMA_API_URL   API base URL (default: http://soma.zea.localhost)
+  SOMA_API_KEY   API key for authentication
+
+Examples:
+  soma-agent agent create --name "Reviewer" --engine pi
+  soma-agent agent list
+  soma-agent doctor run
+  soma-agent auth login
+EOF
+}
+
+# ── Auth header ───────────────────────────────────────────────────────────
+
+auth_header() {
+  if [ -n "${SOMA_KEY:-}" ]; then
+    echo "x-api-key: $SOMA_KEY"
+  elif [ -n "${SOMA_TOKEN:-}" ]; then
+    echo "Authorization: Bearer $SOMA_TOKEN"
+  else
+    echo -e "\033[0;31m⚠️  Not authenticated. Run: soma-agent auth login\033[0m" >&2
+    exit 1
+  fi
+}
+
+# ── JSON mode ─────────────────────────────────────────────────────────────
+
+for arg in "$@"; do
+  case "$arg" in
+    --json) JSON_OUTPUT=true ;;
+    --help) usage; exit 0 ;;
+  esac
+done
+
+# Remove --json and --help from args before dispatching
+FILTERED_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --json|--help) ;;
+    *) FILTERED_ARGS+=("$arg") ;;
+  esac
+done
+set -- "${FILTERED_ARGS[@]}"
+
+# ── Dispatch ──────────────────────────────────────────────────────────────
+
+CMD="${1:-}"
+shift || true
+
+case "$CMD" in
+  agent)         source "$COMMANDS_DIR/agent.sh";         agent_main "$@" ;;
+  skill)         source "$COMMANDS_DIR/skill.sh";         skill_main "$@" ;;
+  workspace)     source "$COMMANDS_DIR/workspace.sh";     workspace_main "$@" ;;
+  engine)        source "$COMMANDS_DIR/engine.sh";        engine_main "$@" ;;
+  conversation)  source "$COMMANDS_DIR/conversation.sh";  conv_main "$@" ;;
+  doctor)        source "$COMMANDS_DIR/doctor.sh";        doctor_main "$@" ;;
+  auth)          source "$COMMANDS_DIR/auth.sh";          auth_main "$@" ;;
+  *)             usage; exit 1 ;;
+esac
