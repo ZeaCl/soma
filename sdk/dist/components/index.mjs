@@ -25,7 +25,7 @@ function useGlia(options) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const streamRef = useRef("");
-  const wsUrl = baseUrl ? `${baseUrl.replace("http", "ws")}/agent-ws` : `ws://${typeof window !== "undefined" ? window.location.host : "localhost"}/agent-ws`;
+  const wsUrl = baseUrl ? `${baseUrl.replace("https", "wss").replace("http", "ws")}${options.wsPath || "/agent-ws"}` : `${typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws"}://${typeof window !== "undefined" ? window.location.host : "localhost"}${options.wsPath || "/agent-ws"}`;
   const contentRef = useRef("");
   const thinkingRef = useRef("");
   const connect = useCallback(() => {

@@ -27,7 +27,7 @@ function useGlia(options) {
   const [isStreaming, setIsStreaming] = react.useState(false);
   const [streamContent, setStreamContent] = react.useState("");
   const streamRef = react.useRef("");
-  const wsUrl = baseUrl ? `${baseUrl.replace("http", "ws")}/agent-ws` : `ws://${typeof window !== "undefined" ? window.location.host : "localhost"}/agent-ws`;
+  const wsUrl = baseUrl ? `${baseUrl.replace("https", "wss").replace("http", "ws")}${options.wsPath || "/agent-ws"}` : `${typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws"}://${typeof window !== "undefined" ? window.location.host : "localhost"}${options.wsPath || "/agent-ws"}`;
   const contentRef = react.useRef("");
   const thinkingRef = react.useRef("");
   const connect = react.useCallback(() => {
@@ -728,11 +728,108 @@ function GliaSkillEditor({ skills, loading, onCreate, onDelete }) {
   ] }, skill.name)) });
 }
 
+// src/sandbox/rest-provider.ts
+function createRestSandboxProvider(options = {}) {
+  const base = options.baseUrl || "";
+  const getHeaders = options.authHeaders || (() => options.apiKey ? { "x-api-key": options.apiKey } : {});
+  async function apiFetch2(path, init) {
+    const res = await fetch(`${base}${path}`, {
+      ...init,
+      headers: { ...getHeaders(), ...init?.headers }
+    });
+    if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+    return res.json();
+  }
+  return {
+    async listFiles(p) {
+      const data = await apiFetch2(`/api/v1/files?path=${encodeURIComponent(p)}`);
+      return (data.files || []).map((f) => ({
+        name: f.name,
+        type: f.type,
+        size: f.size,
+        ext: f.ext
+      }));
+    },
+    async readFile(p) {
+      const res = await fetch(`${base}/api/v1/files/content?path=${encodeURIComponent(p)}`, {
+        headers: getHeaders()
+      });
+      if (!res.ok) throw new Error(`Read failed: ${res.status}`);
+      return res.text();
+    },
+    async writeFile(p, content) {
+      const name = p.split("/").pop() || "file";
+      const dir = p.split("/").slice(0, -1).join("/");
+      const data = btoa(unescape(encodeURIComponent(content)));
+      await apiFetch2("/api/v1/files/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, data, path: dir })
+      });
+    },
+    async deleteFile(p) {
+      await apiFetch2(`/api/v1/files?path=${encodeURIComponent(p)}`, { method: "DELETE" });
+    },
+    async mkdir(p) {
+      await apiFetch2("/api/v1/files/mkdir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: p })
+      });
+    }
+  };
+}
+
+// src/sandbox/memory-provider.ts
+function createMemorySandboxProvider() {
+  const files = /* @__PURE__ */ new Map();
+  function normPath(p) {
+    return p.replace(/\/+/g, "/").replace(/\/$/, "") || "/";
+  }
+  return {
+    async listFiles(p) {
+      const base = normPath(p);
+      const seen = /* @__PURE__ */ new Set();
+      const result = [];
+      for (const [fp, content] of files) {
+        if (!fp.startsWith(base === "/" ? "" : base)) continue;
+        const relative = fp.slice(base === "/" ? 1 : base.length + 1);
+        const parts = relative.split("/");
+        const name = parts[0];
+        if (seen.has(name)) continue;
+        seen.add(name);
+        if (parts.length === 1) {
+          result.push({ name, type: "file", size: content.length });
+        } else {
+          result.push({ name, type: "dir", size: 0 });
+        }
+      }
+      return result;
+    },
+    async readFile(p) {
+      const key = normPath(p);
+      const content = files.get(key);
+      if (content === void 0) throw new Error(`File not found: ${p}`);
+      return content;
+    },
+    async writeFile(p, content) {
+      files.set(normPath(p), content);
+    },
+    async deleteFile(p) {
+      files.delete(normPath(p));
+    },
+    async mkdir(_p) {
+    }
+  };
+}
+
 exports.GliaChat = GliaChat;
 exports.GliaConversationList = GliaConversationList;
 exports.GliaCopilot = GliaCopilot;
 exports.GliaFileBrowser = GliaFileBrowser;
 exports.GliaSkillEditor = GliaSkillEditor;
+exports.createMemorySandboxProvider = createMemorySandboxProvider;
+exports.createRestSandboxProvider = createRestSandboxProvider;
 exports.useGlia = useGlia;
 exports.useGliaAgents = useGliaAgents;
 exports.useGliaConversations = useGliaConversations;
