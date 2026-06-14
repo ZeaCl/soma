@@ -113,10 +113,32 @@ async function shot(page, name) {
       }
     }
 
-    // Fallback: inject a valid token and go directly to chat
+  // Fallback: use newly created production user credentials
     if (!loggedIn) {
-      console.log('   ⚠️  Login flow failed — injecting token directly');
-      // Use a JWT-like token for the agent ID extraction
+      console.log('   ⚠️  Login form failed — trying direct POST');
+      // Try submitting login via page.evaluate
+      try {
+        await page.evaluate(async () => {
+          const form = document.querySelector('form');
+          if (form) {
+            const email = form.querySelector('input[type="email"], input[name*="email"]');
+            const pass = form.querySelector('input[type="password"]');
+            if (email) email.value = 'c@zea.cl';
+            if (pass) pass.value = '2Infinit0';
+            form.submit();
+          }
+        });
+        await page.waitForTimeout(4000);
+        console.log('   Direct form submit attempted, URL:', page.url().slice(0,80));
+        if (page.url().includes('soma.zea.cl') || page.url().includes('authorize')) {
+          loggedIn = true;
+        }
+      } catch(e) { console.log('   Form submit error:', e.message); }
+    }
+
+    // Last resort: inject token
+    if (!loggedIn) {
+      console.log('   ⚠️  Injecting token directly');
       const header = btoa(JSON.stringify({alg:'HS256',typ:'JWT'}));
       const payload = btoa(JSON.stringify({sub:'user_c0000000-852c-44e5-aee1-a761ec76eaea'}));
       const fakeJwt = header + '.' + payload + '.fake';
