@@ -725,6 +725,41 @@ function GliaSkillEditor({ skills, loading, onCreate, onDelete }) {
     )
   ] }, skill.name)) });
 }
+var Z = {
+  mu: "#8b949e",
+  pr: "#58a6ff"
+};
+function SomaPanel() {
+  const [view, setView] = useState("files");
+  const navItem = (v, label, icon) => /* @__PURE__ */ jsxs(
+    "button",
+    {
+      onClick: () => setView(v),
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        width: "100%",
+        padding: "6px 16px",
+        border: "none",
+        cursor: "pointer",
+        background: view === v ? `${Z.pr}15` : "transparent",
+        color: view === v ? Z.pr : Z.mu,
+        fontSize: 13,
+        fontFamily: "system-ui, sans-serif",
+        textAlign: "left"
+      },
+      children: [
+        /* @__PURE__ */ jsx("span", { style: { fontSize: 14, width: 20, textAlign: "center" }, children: icon }),
+        label
+      ]
+    }
+  );
+  return /* @__PURE__ */ jsxs("div", { children: [
+    navItem("files", "Files", "\u{1F4C1}"),
+    navItem("skills", "Skills", "\u{1F6E0}\uFE0F")
+  ] });
+}
 
 // src/sandbox/rest-provider.ts
 function createRestSandboxProvider(options = {}) {
@@ -733,7 +768,7 @@ function createRestSandboxProvider(options = {}) {
   async function apiFetch2(path, init) {
     const res = await fetch(`${base}${path}`, {
       ...init,
-      headers: { ...getHeaders(), ...init?.headers }
+      headers: { ...getHeaders(), ...init?.headers || {} }
     });
     if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
     return res.json();
@@ -821,6 +856,6 @@ function createMemorySandboxProvider() {
   };
 }
 
-export { GliaChat, GliaConversationList, GliaCopilot, GliaFileBrowser, GliaSkillEditor, createMemorySandboxProvider, createRestSandboxProvider, useGlia, useGliaAgents, useGliaConversations, useGliaFiles, useGliaSkills };
+export { GliaChat, GliaConversationList, GliaCopilot, GliaFileBrowser, GliaSkillEditor, SomaPanel, createMemorySandboxProvider, createRestSandboxProvider, useGlia, useGliaAgents, useGliaConversations, useGliaFiles, useGliaSkills };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

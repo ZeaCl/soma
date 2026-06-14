@@ -9,6 +9,7 @@ export { GliaCopilot } from './components/GliaCopilot'
 export { GliaConversationList } from './components/GliaConversationList'
 export { GliaFileBrowser } from './components/GliaFileBrowser'
 export { GliaSkillEditor } from './components/GliaSkillEditor'
+export { SomaPanel } from './components/SomaPanel'
 
 // Sandbox providers
 export { createRestSandboxProvider } from './sandbox/rest-provider'

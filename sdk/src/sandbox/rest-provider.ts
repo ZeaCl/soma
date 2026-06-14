@@ -19,7 +19,7 @@ export function createRestSandboxProvider(options: RestSandboxOptions = {}): San
   async function apiFetch(path: string, init?: RequestInit) {
     const res = await fetch(`${base}${path}`, {
       ...init,
-      headers: { ...getHeaders(), ...init?.headers },
+      headers: { ...getHeaders(), ...(init?.headers as Record<string, string> || {}) } as HeadersInit,
     })
     if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`)
     return res.json()
@@ -38,7 +38,7 @@ export function createRestSandboxProvider(options: RestSandboxOptions = {}): San
 
     async readFile(p: string): Promise<string> {
       const res = await fetch(`${base}/api/v1/files/content?path=${encodeURIComponent(p)}`, {
-        headers: getHeaders(),
+        headers: getHeaders() as HeadersInit,
       })
       if (!res.ok) throw new Error(`Read failed: ${res.status}`)
       return res.text()

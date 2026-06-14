@@ -727,6 +727,41 @@ function GliaSkillEditor({ skills, loading, onCreate, onDelete }) {
     )
   ] }, skill.name)) });
 }
+var Z = {
+  mu: "#8b949e",
+  pr: "#58a6ff"
+};
+function SomaPanel() {
+  const [view, setView] = react.useState("files");
+  const navItem = (v, label, icon) => /* @__PURE__ */ jsxRuntime.jsxs(
+    "button",
+    {
+      onClick: () => setView(v),
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        width: "100%",
+        padding: "6px 16px",
+        border: "none",
+        cursor: "pointer",
+        background: view === v ? `${Z.pr}15` : "transparent",
+        color: view === v ? Z.pr : Z.mu,
+        fontSize: 13,
+        fontFamily: "system-ui, sans-serif",
+        textAlign: "left"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntime.jsx("span", { style: { fontSize: 14, width: 20, textAlign: "center" }, children: icon }),
+        label
+      ]
+    }
+  );
+  return /* @__PURE__ */ jsxRuntime.jsxs("div", { children: [
+    navItem("files", "Files", "\u{1F4C1}"),
+    navItem("skills", "Skills", "\u{1F6E0}\uFE0F")
+  ] });
+}
 
 // src/sandbox/rest-provider.ts
 function createRestSandboxProvider(options = {}) {
@@ -735,7 +770,7 @@ function createRestSandboxProvider(options = {}) {
   async function apiFetch2(path, init) {
     const res = await fetch(`${base}${path}`, {
       ...init,
-      headers: { ...getHeaders(), ...init?.headers }
+      headers: { ...getHeaders(), ...init?.headers || {} }
     });
     if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
     return res.json();
@@ -828,6 +863,7 @@ exports.GliaConversationList = GliaConversationList;
 exports.GliaCopilot = GliaCopilot;
 exports.GliaFileBrowser = GliaFileBrowser;
 exports.GliaSkillEditor = GliaSkillEditor;
+exports.SomaPanel = SomaPanel;
 exports.createMemorySandboxProvider = createMemorySandboxProvider;
 exports.createRestSandboxProvider = createRestSandboxProvider;
 exports.useGlia = useGlia;
