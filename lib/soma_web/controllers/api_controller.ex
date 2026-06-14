@@ -45,7 +45,7 @@ defmodule SomaWeb.ApiController do
   # ── API Keys ────────────────────────────────────
 
   post "/api-keys" do
-    org_id = conn.assigns[:org_id]
+    org_id = conn.assigns[:org_id] || "00000000-0000-0000-0000-000000000000"
     attrs = conn.body_params
 
     prefix = "zs_live_"
