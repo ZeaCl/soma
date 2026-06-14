@@ -86,8 +86,8 @@ async function shot(page, name) {
       
       if (await emailInput.count() > 0 && await passInput.count() > 0) {
         console.log('   → Filling login form');
-        await emailInput.fill('c@zea.cl');
-        await passInput.fill('2Infinit0');
+        await emailInput.fill('test@example.com');
+        await passInput.fill('test_password_123');
         await shot(page, '03-login.png');
         const submitBtn = page.locator('button[type="submit"]').first();
         if (await submitBtn.count() > 0) {
@@ -123,8 +123,8 @@ async function shot(page, name) {
           if (form) {
             const email = form.querySelector('input[type="email"], input[name*="email"]');
             const pass = form.querySelector('input[type="password"]');
-            if (email) email.value = 'c@zea.cl';
-            if (pass) pass.value = '2Infinit0';
+            if (email) email.value = 'test@example.com';
+            if (pass) pass.value = 'test_password_123';
             form.submit();
           }
         });

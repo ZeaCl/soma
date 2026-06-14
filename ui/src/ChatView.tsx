@@ -59,14 +59,14 @@ function Sidebar({ active, onSelect, onLogout }: { active: string; onSelect: (id
     ]},
     { label: 'MESSAGES', items: [
       { id:'ch-general', icon:'#', label:'general', indent:0 },
-      { id:'ch-fund-debug', icon:'#', label:'fund-ii-debug', indent:0 },
-      { id:'ch-deploy', icon:'#', label:'deploy-v2', indent:0 },
+      { id:'ch-general-dev', icon:'#', label:'general-dev', indent:0 },
+      { id:'ch-deploy', icon:'#', label:'deploy', indent:0 },
     ]},
     { label: 'DIRECT MSGS', items: [
       { id:'dm-fullstack', icon:'💬', label:'Full Stack Dev', online:true },
       { id:'dm-reviewer', icon:'💬', label:'Code Reviewer', online:true },
       { id:'dm-analyst', icon:'💬', label:'Data Analyst', online:false },
-      { id:'dm-camila', icon:'💬', label:'Camila Cerda', online:false },
+      { id:'dm-camila', icon:'💬', label:'Agent Alpha', online:false },
     ]},
   ]
 
@@ -102,8 +102,8 @@ function Sidebar({ active, onSelect, onLogout }: { active: string; onSelect: (id
       <div style={{ borderTop:BW, padding:'10px 16px', flexShrink:0, display:'flex', alignItems:'center', gap:10 }}>
         <div style={{ width:28, height:28, borderRadius:'50%', background:B1, color:BM, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0 }}>CH</div>
         <div style={{ minWidth:0, flex:1 }}>
-          <div style={{ fontSize:12, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>Carlos Hinostroza</div>
-          <div style={{ fontSize:10, color:BS }}>Fund Manager</div>
+          <div style={{ fontSize:12, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>User</div>
+          <div style={{ fontSize:10, color:BS }}>Developer</div>
         </div>
         <button onClick={onLogout} style={{ background:'none', border:'none', color:BS, cursor:'pointer', fontSize:13, padding:2 }}>🚪</button>
       </div>

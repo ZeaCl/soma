@@ -67,8 +67,8 @@ function check(condition, label) {
 
     // Login if needed
     if (page.url().includes('login')) {
-      await page.fill('input[name="session[email]"]', 'c@zea.cl');
-      await page.fill('input[name="session[password]"]', '2Infinit0');
+      await page.fill('input[name="session[email]"]', 'test@example.com');
+      await page.fill('input[name="session[password]"]', 'test_password_123');
       await shot(page, '02-login.png');
       await page.locator('button[type="submit"]').click();
       await page.waitForTimeout(3000);

@@ -32,8 +32,8 @@ async function shot(page, name) {
     // 3. Login if needed
     if (page.url().includes('login')) {
       console.log('3️⃣  Login');
-      await page.fill('input[name="session[email]"]', 'c@zea.cl');
-      await page.fill('input[name="session[password]"]', '2Infinit0');
+      await page.fill('input[name="session[email]"]', 'test@example.com');
+      await page.fill('input[name="session[password]"]', 'test_password_123');
       await shot(page, '02-login.png');
       await page.locator('button[type="submit"]').click();
       await page.waitForTimeout(3000);
