@@ -173,7 +173,7 @@ function ApiKeysView() {
     try {
       const res = await fetch('https://soma.zea.cl/api/v1/api-keys', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': token || 'zs_live_bootstrap_test_key_2026' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token || 'zs_live_bootstrap_test_key_2026'}` },
         body: JSON.stringify({ name: `key-${Date.now()}`, scopes: ['soma:read', 'soma:write'] })
       })
       const data = await res.json()
@@ -256,7 +256,7 @@ function FilesView() {
 
   useEffect(() => {
     fetch('https://soma.zea.cl/api/v1/files', {
-      headers: { 'x-api-key': token || 'zs_live_bootstrap_test_key_2026' }
+      headers: { 'Authorization': `Bearer ${token || 'zs_live_bootstrap_test_key_2026'}` }
     })
       .then(r => r.json())
       .then(d => { setFiles(d.files || []); setLoading(false) })
