@@ -45,7 +45,7 @@ export default function ZeaLanding({ onLogin, error }: LandingProps) {
             {' '}or platform in seconds
           </h1>
           <p style={{ fontSize:'clamp(1rem, 2.2vw, 1.2rem)', lineHeight:1.7, color:muted, maxWidth:650, margin:'0 auto 48px' }}>
-            AI agents, automated workflows, real-time messaging, and payments — 
+            AI gateway, agents, workflows, messaging, and payments — 
             one platform, one login, one SDK.
           </p>
 
