@@ -42,7 +42,7 @@ export default function ZeaLanding({ onLogin, error }: LandingProps) {
           <h1 style={{ fontSize:'clamp(2.5rem, 6vw, 4.5rem)', fontWeight:800, lineHeight:1.08, letterSpacing:'-0.03em', marginBottom:24 }}>
             Empower your{' '}
             <span className="zea-gradient-text">organization</span>
-            {' '}in seconds
+            {' '}or platform in seconds
           </h1>
           <p style={{ fontSize:'clamp(1rem, 2.2vw, 1.2rem)', lineHeight:1.7, color:muted, maxWidth:650, margin:'0 auto 48px' }}>
             AI agents, automated workflows, real-time messaging, and payments — 
