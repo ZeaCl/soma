@@ -10,8 +10,11 @@ type View = 'landing' | 'login' | 'chat' | 'callback'
 function isZeaCl(): boolean {
   if (typeof window === 'undefined') return false
   const host = window.location.hostname
-  // zea.cl or app.zea.cl → platform landing
-  return host === 'zea.cl' || host === 'www.zea.cl' || host === 'app.zea.cl'
+  // zea.cl or app.zea.cl (prod) or zea.localhost (dev) → platform landing
+  // soma.zea.cl or soma.zea.localhost → agent landing
+  const isPlatform = ['zea.cl', 'www.zea.cl', 'app.zea.cl', 'zea.localhost'].includes(host)
+  const isAgent = host.startsWith('soma.')
+  return isPlatform && !isAgent
 }
 
 export default function App() {
