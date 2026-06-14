@@ -121,7 +121,7 @@ function Main({ active, chatVisible, onToggleChat }: { active: string; chatVisib
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <img src="/icono-zea.svg" alt="" style={{ height:14, filter:'brightness(0) invert(1) brightness(0.675)' }} />
-          <span style={{ color:BM, fontWeight:500 }}>Agents Hub</span>
+          <span style={{ color:BM, fontWeight:500 }}>ZEA Platform</span>
           {active !== 'home' && <><span style={{ color:BS }}>/</span><span style={{ color:BC, fontWeight:500 }}>{itemLabel(active)}</span></>}
         </div>
         <button onClick={onToggleChat} className="zea-btn zea-btn--ghost zea-btn--sm" style={{ fontSize:11 }}>
