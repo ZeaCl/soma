@@ -23,7 +23,7 @@ export default function ZeaLanding({ onLogin, error }: LandingProps) {
             <img src="/text-zea.svg" alt="" style={{ height:16, filter:'brightness(0) invert(1) brightness(0.675)' }} />
           </a>
           <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-            <a href="/devs" style={{ fontSize:13, fontWeight:500, color:muted }}>For Developers</a>
+            <a href="/devs" style={{ fontSize:13, fontWeight:500, color:muted }}>Developers</a>
             <a href="https://docs.zea.dev" target="_blank" style={{ fontSize:13, fontWeight:500, color:muted }}>Docs</a>
             <a href="https://github.com/ZeaCl" target="_blank"
               style={{ color:muted, display:'flex', alignItems:'center', textDecoration:'none' }}
