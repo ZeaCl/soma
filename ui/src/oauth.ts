@@ -1,6 +1,27 @@
 const CLIENT_ID = 'soma_service'
-const AUTH_URL = 'http://auth.zea.localhost'
-const REDIRECT_URI = 'http://soma.zea.localhost/callback'
+
+function getBaseUrl(): string {
+  if (typeof window === 'undefined') return 'http://soma.zea.localhost'
+  const host = window.location.hostname
+  // Production: soma.zea.cl → auth.zea.cl
+  if (host.endsWith('.zea.cl')) {
+    return `https://${host}`
+  }
+  // Local dev: soma.zea.localhost → auth.zea.localhost
+  return `http://${host}`
+}
+
+function getAuthUrl(): string {
+  if (typeof window === 'undefined') return 'http://auth.zea.localhost'
+  const host = window.location.hostname
+  if (host.endsWith('.zea.cl')) return 'https://auth.zea.cl'
+  if (host.endsWith('.zea.localhost')) return 'http://auth.zea.localhost'
+  return 'http://auth.zea.localhost'
+}
+
+function getRedirectUri(): string {
+  return `${getBaseUrl()}/callback`
+}
 
 function base64URLEncode(buffer: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)))
@@ -19,18 +40,18 @@ export function generatePKCE() {
 export function getAuthorizationUrl(codeChallenge: string): string {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: getRedirectUri(),
     response_type: 'code',
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     scope: 'openid profile email',
     state: crypto.randomUUID(),
   })
-  return `${AUTH_URL}/oauth/authorize?${params}`
+  return `${getAuthUrl()}/oauth/authorize?${params}`
 }
 
 export async function exchangeCode(code: string, codeVerifier: string): Promise<string> {
-  const res = await fetch(`${AUTH_URL}/oauth/token`, {
+  const res = await fetch(`${getAuthUrl()}/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -38,7 +59,7 @@ export async function exchangeCode(code: string, codeVerifier: string): Promise<
       client_id: CLIENT_ID,
       code,
       code_verifier: codeVerifier,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: getRedirectUri(),
     }),
   })
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`)
