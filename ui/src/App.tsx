@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react'
 import Landing from './Landing'
+import ZeaLanding from './ZeaLanding'
 import Login from './Login'
 import ChatView from './ChatView'
 import { exchangeCode } from './oauth'
 
 type View = 'landing' | 'login' | 'chat' | 'callback'
+
+function isZeaCl(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname
+  // zea.cl or app.zea.cl → platform landing
+  return host === 'zea.cl' || host === 'www.zea.cl' || host === 'app.zea.cl'
+}
 
 export default function App() {
   const [view, setView] = useState<View>(() => {
@@ -59,5 +67,6 @@ export default function App() {
     localStorage.removeItem('soma_token'); setView('landing')
   }} />
   if (view === 'login') return <Login />
+  if (isZeaCl()) return <ZeaLanding onLogin={() => setView('login')} error={error} />
   return <Landing onLogin={() => setView('login')} error={error} />
 }
