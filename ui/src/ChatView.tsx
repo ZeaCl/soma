@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { GliaChat } from '@zea/soma-sdk'
 
 interface ChatViewProps { onLogout: () => void }
@@ -130,27 +130,10 @@ function Main({ active, chatVisible, onToggleChat }: { active: string; chatVisib
       </header>
 
       <div style={{ flex:1, overflowY:'auto', background:'#fafafa', color:'#24292f' }}>
-        <div style={{ padding:'40px 32px', maxWidth:720 }}>
-          <SectionHeader>👋 Welcome to Agents Hub</SectionHeader>
-          <Description>
-            Infraestructura cloud para crear y ejecutar agentes de IA autónomos.
-            Sin construir orquestación ni sandboxes desde cero.
-          </Description>
-
-          <SectionHeader style={{ marginTop:40 }}>📋 Get Started</SectionHeader>
-          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-            {steps.map((s, i) => (
-              <Step key={i} num={i+1} title={s.title} desc={s.desc} />
-            ))}
-          </div>
-
-          <div style={{ marginTop:40, padding:'20px 24px', background:'#f6f8fa', borderRadius:10, border:'1px solid #d0d7de' }}>
-            <div style={{ fontWeight:600, fontSize:14, marginBottom:12 }}>También podés:</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:8, fontSize:13, color:'#656d76' }}>
-              {also.map(a => <div key={a} style={{ display:'flex', gap:8 }}><span>{a}</span></div>)}
-            </div>
-          </div>
-        </div>
+        {active === 'apikeys' ? <ApiKeysView /> :
+         active === 'skills'  ? <SkillsView /> :
+         active === 'files'   ? <FilesView /> :
+         <HomeView />}
       </div>
     </main>
   )
@@ -176,7 +159,154 @@ function Handle({ persist, w, setW, min, max, dir = 1 }: { persist:string; w:num
     onMouseLeave={e => e.currentTarget.style.background='var(--zea-b2)'} />
 }
 
-// ── Helpers ──
+// ── API Key management ──
+function ApiKeysView() {
+  const [keys, setKeys] = useState<any[]>([])
+  const [newKey, setNewKey] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('soma_token') || '' : ''
+
+  const createKey = async () => {
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('https://soma.zea.cl/api/v1/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': token || 'zs_live_bootstrap_test_key_2026' },
+        body: JSON.stringify({ name: `key-${Date.now()}`, scopes: ['soma:read', 'soma:write'] })
+      })
+      const data = await res.json()
+      if (data.api_key) {
+        setNewKey(data.api_key)
+        setKeys(prev => [...prev, { api_key: data.api_key, prefix: data.prefix, created: new Date().toISOString() }])
+      } else {
+        setError(data.error || 'Failed to create key')
+      }
+    } catch (e: any) { setError(e.message) }
+    setLoading(false)
+  }
+
+  return (
+    <div style={{ padding:'40px 32px', maxWidth:720 }}>
+      <SectionHeader>🔑 API Keys</SectionHeader>
+      <p style={{ fontSize:14, color:'#656d76', lineHeight:1.6, marginBottom:24 }}>
+        Generate API keys to authenticate your agents and tools.
+        Each key is scoped to your organization.
+      </p>
+
+      {error && <div style={{ padding:'10px 16px', background:'#fff0f0', borderRadius:8, color:'#c00', marginBottom:16, fontSize:13 }}>{error}</div>}
+
+      <button onClick={createKey} disabled={loading}
+        style={{
+          padding:'10px 24px', borderRadius:8, border:'none', cursor:'pointer',
+          background:'#238636', color:'#fff', fontSize:13, fontWeight:600,
+          opacity: loading ? 0.7 : 1
+        }}>
+        {loading ? 'Generating...' : '+ Generate API Key'}
+      </button>
+
+      {newKey && (
+        <div style={{ marginTop:24, padding:'16px 20px', background:'#f0fff0', borderRadius:10, border:'1px solid #2ea44f' }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'#2ea44f', marginBottom:8 }}>✅ API Key created — copy it now, it won&apos;t be shown again</div>
+          <code style={{
+            display:'block', padding:'12px 16px', background:'#fff', borderRadius:6, border:'1px solid #d0d7de',
+            fontSize:12, fontFamily:'monospace', wordBreak:'break-all', color:'#24292f', userSelect:'all'
+          }}>{newKey}</code>
+          <div style={{ marginTop:12, padding:'12px 16px', background:'#161b22', borderRadius:6, fontSize:11, fontFamily:'monospace', color:'#e6edf3' }}>
+            <div><span style={{ color:'#8b949e' }}>$</span> export SOMA_API_KEY={newKey.slice(0,30)}...</div>
+            <div style={{ marginTop:4, color:'#8b949e' }}># Then use in your app:</div>
+            <div style={{ marginTop:4 }}>{'<GliaChat agentId="..." apiKey={SOMA_API_KEY} />'}</div>
+          </div>
+        </div>
+      )}
+
+      {keys.length > 0 && (
+        <div style={{ marginTop:32 }}>
+          <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>Existing keys</div>
+          {keys.map((k, i) => (
+            <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #eee', fontSize:12, fontFamily:'monospace', color:'#656d76' }}>
+              {k.prefix}...{k.api_key?.slice(-8)} · {new Date(k.created).toLocaleDateString()}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SkillsView() {
+  return (
+    <div style={{ padding:'40px 32px', maxWidth:720 }}>
+      <SectionHeader>🧠 Skills</SectionHeader>
+      <p style={{ fontSize:14, color:'#656d76', lineHeight:1.6 }}>
+        Browse and manage agent skills. Skills give agents domain-specific capabilities.
+      </p>
+      <div style={{ marginTop:24, padding:'20px', background:'#f6f8fa', borderRadius:10, border:'1px solid #d0d7de', fontSize:13, color:'#656d76' }}>
+        Skills management coming soon. Use CLI: <code style={{ background:'#eee', padding:'2px 6px', borderRadius:4 }}>soma-agent skill list</code>
+      </div>
+    </div>
+  )
+}
+
+function FilesView() {
+  const [files, setFiles] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const token = typeof window !== 'undefined' ? localStorage.getItem('soma_token') || '' : ''
+
+  useEffect(() => {
+    fetch('https://soma.zea.cl/api/v1/files', {
+      headers: { 'x-api-key': token || 'zs_live_bootstrap_test_key_2026' }
+    })
+      .then(r => r.json())
+      .then(d => { setFiles(d.files || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  return (
+    <div style={{ padding:'40px 32px', maxWidth:720 }}>
+      <SectionHeader>📁 Files</SectionHeader>
+      <p style={{ fontSize:14, color:'#656d76', lineHeight:1.6, marginBottom:24 }}>
+        Workspace files for your organization.
+      </p>
+      {loading ? <p style={{ color:'#656d76' }}>Loading...</p> :
+       files.length === 0 ? <p style={{ color:'#656d76' }}>No files yet. Use CLI: <code>soma-agent workspace upload</code></p> :
+       files.map((f: any, i: number) => (
+         <div key={i} style={{ padding:'8px 0', borderBottom:'1px solid #eee', display:'flex', gap:12, alignItems:'center' }}>
+           <span>{f.type === 'dir' ? '📁' : '📄'}</span>
+           <span style={{ flex:1, fontSize:13 }}>{f.name}</span>
+           <span style={{ fontSize:11, color:'#656d76' }}>{f.size} bytes</span>
+         </div>
+       ))}
+    </div>
+  )
+}
+
+function HomeView() {
+  return (
+    <div style={{ padding:'40px 32px', maxWidth:720 }}>
+      <SectionHeader>👋 Welcome to Agents Hub</SectionHeader>
+      <Description>
+        Infraestructura cloud para crear y ejecutar agentes de IA autónomos.
+        Sin construir orquestación ni sandboxes desde cero.
+      </Description>
+
+      <SectionHeader style={{ marginTop:40 }}>📋 Get Started</SectionHeader>
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        {steps.map((s, i) => (
+          <Step key={i} num={i+1} title={s.title} desc={s.desc} />
+        ))}
+      </div>
+
+      <div style={{ marginTop:40, padding:'20px 24px', background:'#f6f8fa', borderRadius:10, border:'1px solid #d0d7de' }}>
+        <div style={{ fontWeight:600, fontSize:14, marginBottom:12 }}>Also you can:</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, fontSize:13, color:'#656d76' }}>
+          {also.map(a => <div key={a} style={{ display:'flex', gap:8 }}><span>{a}</span></div>)}
+        </div>
+      </div>
+    </div>
+  )
+}
 function SectionHeader({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return <h1 style={{ fontSize:22, fontWeight:700, marginBottom:8, ...style }}>{children}</h1>
 }
