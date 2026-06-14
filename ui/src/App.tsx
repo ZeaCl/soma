@@ -1,10 +1,20 @@
 import { useState, useEffect } from 'react'
 import Landing from './Landing'
+import ZeaLanding from './ZeaLanding'
+import DevsLanding from './DevsLanding'
 import Login from './Login'
 import ChatView from './ChatView'
 import { exchangeCode } from './oauth'
 
 type View = 'landing' | 'login' | 'chat' | 'callback'
+
+function getLandingType(): 'zea' | 'devs' | 'soma' {
+  if (typeof window === 'undefined') return 'soma'
+  const host = window.location.hostname
+  if (host.startsWith('devs.')) return 'devs'
+  if (host.startsWith('soma.')) return 'soma'
+  return 'zea'
+}
 
 export default function App() {
   const [view, setView] = useState<View>(() => {
@@ -14,7 +24,6 @@ export default function App() {
   })
   const [error, setError] = useState('')
 
-  // OAuth2 callback handler
   useEffect(() => {
     if (view !== 'callback') return
     const params = new URLSearchParams(window.location.search)
@@ -59,5 +68,9 @@ export default function App() {
     localStorage.removeItem('soma_token'); setView('landing')
   }} />
   if (view === 'login') return <Login />
+
+  const landingType = getLandingType()
+  if (landingType === 'devs') return <DevsLanding onLogin={() => setView('login')} error={error} />
+  if (landingType === 'zea') return <ZeaLanding onLogin={() => setView('login')} error={error} />
   return <Landing onLogin={() => setView('login')} error={error} />
 }
