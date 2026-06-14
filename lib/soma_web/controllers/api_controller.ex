@@ -56,7 +56,8 @@ defmodule SomaWeb.ApiController do
       name: attrs["name"] || "default",
       key_hash: key_hash, key_prefix: prefix,
       scopes: attrs["scopes"] || ["soma:read", "soma:write"],
-      organization_id: org_id
+      organization_id: org_id,
+      agent_id: attrs["agent_id"]
     }
 
     case %ApiKey{} |> ApiKey.changeset(key_attrs) |> Repo.insert() do
@@ -276,6 +277,37 @@ defmodule SomaWeb.ApiController do
       {:ok, _} -> send_resp(conn, 200, Jason.encode!(%{ok: true}))
       {:error, :not_found} -> send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
     end
+  end
+
+  # ── Agent Sharing (Google Drive model) ─────────
+
+  post "/agents/:id/share" do
+    user_id = conn.assigns[:user_id] || conn.body_params["user_id"]
+    shared_with = conn.body_params["shared_with_user_id"]
+    case Soma.AgentShares.share(id, shared_with, user_id) do
+      {:ok, _} -> send_resp(conn, 200, Jason.encode!(%{ok: true}))
+      {:error, cs} ->
+        errors = Ecto.Changeset.traverse_errors(cs, fn {msg, _} -> msg end)
+        send_resp(conn, 422, Jason.encode!(%{error: "validation_failed", details: errors}))
+    end
+  end
+
+  delete "/agents/:id/share/:user_id" do
+    case Soma.AgentShares.unshare(id, user_id) do
+      {:ok, _} -> send_resp(conn, 200, Jason.encode!(%{ok: true}))
+      {:error, :not_found} -> send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+    end
+  end
+
+  get "/agents/:id/shares" do
+    shares = Soma.AgentShares.list_shares_for_agent(id)
+    send_resp(conn, 200, Jason.encode!(%{data: shares}))
+  end
+
+  get "/agent-shares" do
+    user_id = conn.assigns[:user_id] || "system"
+    shares = Soma.AgentShares.list_shared_with(user_id)
+    send_resp(conn, 200, Jason.encode!(%{data: shares}))
   end
 
   match _ do
