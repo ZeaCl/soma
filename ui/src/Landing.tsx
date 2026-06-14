@@ -131,7 +131,7 @@ export default function Landing({ onLogin, error }: LandingProps) {
               <div style={{ paddingLeft:20 }}>--engine <span style={{ color:'#fbbf24' }}>pi</span> \</div>
               <div style={{ paddingLeft:20 }}>--system-prompt <span style={{ color:'#a78bfa' }}>"Eres analista cuantitativo..."</span> \</div>
               <div style={{ paddingLeft:20 }}>--tools <span style={{ color:'#fbbf24' }}>read,bash,edit,write</span> \</div>
-              <div style={{ paddingLeft:20 }}>--skills <span style={{ color:'#fbbf24' }}>xlsx,venture</span> \</div>
+              <div style={{ paddingLeft:20 }}>--skills <span style={{ color:'#fbbf24' }}>xlsx,financial</span> \</div>
               <div style={{ paddingLeft:20 }}>--mount <span style={{ color:'#a78bfa' }}>/workspace/orgs/org-1/shared</span>:<span style={{ color:'#6ee7b7' }}>shared</span></div>
               <div style={{ marginTop:8 }} />
               <div style={{ color:'#3fb950' }}>✅ Agent created: c4e2791b-026b-4508-a2c3-1580bf86b661</div>
@@ -142,7 +142,7 @@ export default function Landing({ onLogin, error }: LandingProps) {
               <div><span style={{ color:'#22d3ee' }}>$</span> soma-agent conversation chat c4e2791b</div>
               <div style={{ color:muted }}>🧠 Chat with Financial Analyst (pi) — Ctrl+D to exit</div>
               <div style={{ marginTop:4 }} />
-              <div><span style={{ color:'#818cf8' }}>▶</span> <span style={{ color:'var(--zea-bc)' }}>Analizá el portfolio de Fund II Q1 2026</span></div>
+              <div><span style={{ color:'#818cf8' }}>▶</span> <span style={{ color:'var(--zea-bc)' }}>Analizá las métricas de ventas Q1 2026</span></div>
               <div style={{ marginTop:4 }}>
                 <span style={{ color:'#a78bfa' }}>🤖</span>{' '}
                 <span style={{ display:'inline-block', width:6, height:13, background:muted, animation:'cranium-pulse 1s infinite', verticalAlign:'middle', borderRadius:2 }} />
