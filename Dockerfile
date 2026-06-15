@@ -16,7 +16,7 @@ RUN mix compile
 RUN mix release
 
 FROM alpine:3.21.3 AS runtime
-RUN apk add --no-cache ncurses-libs openssl libstdc++ bash nodejs npm git docker-cli docker-cli-compose shadow
+RUN apk add --no-cache ncurses-libs openssl libstdc++ bash nodejs npm git docker-cli docker-cli-compose shadow sudo
 WORKDIR /app
 
 # ── Pi CLI (global, para subprocesos pi --mode rpc) ─────────────────
@@ -43,7 +43,7 @@ COPY scripts/soma-agent-userdel /usr/local/bin/soma-agent-userdel
 RUN chmod +x /usr/local/bin/soma-agent-useradd /usr/local/bin/soma-agent-userdel
 
 # ── Directorios base para el sandbox multi-agente ───────────────────
-RUN mkdir -p /home/soma /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages
+RUN mkdir -p /home/soma /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages /app/.pi-agent-sessions
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh

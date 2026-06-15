@@ -494,8 +494,7 @@ wss.on('connection', (ws: WebSocket) => {
 
       // 3. Crear RPC bridge
       const bridge = new RpcBridge({
-        uid: sandbox.uid,
-        gid: sandbox.gid,
+        username: sandbox.username,
         home: sandbox.home,
         systemPrompt: config.systemPrompt,
       })
