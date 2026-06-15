@@ -26,6 +26,7 @@ function useGlia(options) {
   const [isStreaming, setIsStreaming] = react.useState(false);
   const [streamContent, setStreamContent] = react.useState("");
   const streamRef = react.useRef("");
+  const historyLoaded = react.useRef(false);
   const wsUrl = baseUrl ? `${baseUrl.replace("https", "wss").replace("http", "ws")}${options.wsPath || "/agent-ws"}` : `${typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws"}://${typeof window !== "undefined" ? window.location.host : "localhost"}${options.wsPath || "/agent-ws"}`;
   const contentRef = react.useRef("");
   const thinkingRef = react.useRef("");
@@ -151,11 +152,28 @@ function useGlia(options) {
     wsRef.current = ws;
   }, [wsUrl, agentId, conversationId]);
   react.useEffect(() => {
+    if (!historyLoaded.current && apiKey && conversationId) {
+      historyLoaded.current = true;
+      const api = baseUrl ? `${baseUrl}/api/conversations/${encodeURIComponent(conversationId)}` : "";
+      if (api) {
+        fetch(api, { headers: { Authorization: `Bearer ${apiKey}` } }).then((r) => r.json()).then((d) => {
+          if (d.messages?.length) setMessages(d.messages.map((m) => ({
+            id: m.id || crypto.randomUUID(),
+            role: m.role,
+            content: m.content,
+            thinking: m.thinking,
+            tools: m.tools,
+            timestamp: new Date(m.timestamp || Date.now())
+          })));
+        }).catch(() => {
+        });
+      }
+    }
     connect();
     return () => {
       wsRef.current?.close();
     };
-  }, [connect]);
+  }, [agentId, conversationId]);
   const send = react.useCallback((text) => {
     setMessages((prev) => [...prev, {
       id: crypto.randomUUID(),

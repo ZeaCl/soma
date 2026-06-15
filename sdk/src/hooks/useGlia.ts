@@ -23,6 +23,7 @@ export function useGlia(options: UseGliaOptions): UseGliaReturn {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamContent, setStreamContent] = useState('')
   const streamRef = useRef('')
+  const historyLoaded = useRef(false)
 
   const wsUrl = baseUrl
     ? `${baseUrl.replace('https', 'wss').replace('http', 'ws')}${options.wsPath || '/agent-ws'}`
@@ -156,9 +157,29 @@ export function useGlia(options: UseGliaOptions): UseGliaReturn {
   }, [wsUrl, agentId, conversationId])
 
   useEffect(() => {
+    // Cargar historial antes de conectar
+    if (!historyLoaded.current && apiKey && conversationId) {
+      historyLoaded.current = true
+      const api = baseUrl ? `${baseUrl}/api/conversations/${encodeURIComponent(conversationId)}` : ''
+      if (api) {
+        fetch(api, { headers: { Authorization: `Bearer ${apiKey}` } })
+          .then(r => r.json())
+          .then(d => {
+            if (d.messages?.length) setMessages(d.messages.map((m: any) => ({
+              id: m.id || crypto.randomUUID(),
+              role: m.role,
+              content: m.content,
+              thinking: m.thinking,
+              tools: m.tools,
+              timestamp: new Date(m.timestamp || Date.now()),
+            })))
+          })
+          .catch(() => {})
+      }
+    }
     connect()
     return () => { wsRef.current?.close() }
-  }, [connect])
+  }, [agentId, conversationId])
 
   const send = useCallback((text: string) => {
     setMessages(prev => [...prev, {

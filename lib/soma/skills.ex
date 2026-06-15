@@ -43,6 +43,8 @@ defmodule Soma.Skills do
     |> Enum.sort_by(& &1.name)
   end
 
+  def list(_nil), do: list_builtin_skills() |> Enum.map(&Map.put(&1, :custom, false))
+
   defp add_agent_assignments(skills) do
     registry = read_agent_registry()
     Enum.map(skills, fn skill ->
