@@ -1,5 +1,5 @@
 export { useGlia, useGliaAgents, useGliaConversations, useGliaFileContent, useGliaFiles, useGliaSkills } from './hooks/index.mjs';
-export { G as GliaChat, a as GliaChatColors, b as GliaChatMessage, c as GliaChatProps, d as GliaConversationList, e as GliaCopilot, f as GliaFileBrowser, g as GliaFileViewer, h as GliaSkillEditor } from './index-CcHjEs8k.mjs';
+export { A as AgentSkillPanel, G as GliaChat, a as GliaChatColors, b as GliaChatMessage, c as GliaChatProps, d as GliaConversationList, e as GliaCopilot, f as GliaFileBrowser, g as GliaFileViewer, h as GliaSkillEditor } from './index-DH4DS-pc.mjs';
 import React from 'react';
 export { G as GliaAgent, a as GliaConversation, b as GliaFile, c as GliaMessage, d as GliaSkill, e as GliaStreamEvent, U as UseGliaOptions, f as UseGliaReturn } from './index-DWjQUqKI.mjs';
 

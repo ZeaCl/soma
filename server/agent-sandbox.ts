@@ -209,8 +209,6 @@ function readSkillRegistry(): Record<string, string[]> {
   return {}
 }
 
-}
-
 /**
  * Copia auth.json y settings.json al home del agente.
  * En Docker, las API keys vienen por env vars — esto es fallback para desarrollo local.

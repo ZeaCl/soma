@@ -10,7 +10,7 @@ defmodule SomaWeb.Plugs.JWTAuth do
       ["Bearer " <> token] ->
         case validate_jwt(token) do
           {:ok, claims} ->
-            org_id = get_org_id(conn, claims)
+            org_id = get_org_id(conn, claims, token)
             conn
             |> assign(:user_id, claims["sub"])
             |> assign(:org_id, org_id)
@@ -63,10 +63,40 @@ defmodule SomaWeb.Plugs.JWTAuth do
     :public_key.pem_encode([pem_entry])
   end
 
-  defp get_org_id(conn, claims) do
+  defp get_org_id(conn, claims, token) do
+    # 1. Header explícito
     case get_req_header(conn, "x-zea-org-id") do
       [org_id | _] when org_id != "" -> org_id
-      _ -> (claims["domain_roles"] || []) |> List.first() |> (fn r -> r && r["org_id"] end).()
+      _ ->
+        # 2. JWT claim directo
+        case claims["organization_id"] do
+          org_id when is_binary(org_id) and org_id != "" -> org_id
+          _ ->
+            # 3. Domain roles claim
+            case (claims["domain_roles"] || []) |> List.first() do
+              %{"org_id" => org_id} -> org_id
+              _ ->
+                # 4. Fetch from Thalamus /oauth/userinfo
+                fetch_org_from_thalamus(token)
+            end
+        end
+    end
+  end
+
+  defp fetch_org_from_thalamus(token) do
+    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
+    require Logger
+    Logger.info("JWTAuth: fetching org from Thalamus userinfo")
+    case Req.get("#{thalamus_url}/oauth/userinfo",
+           headers: [authorization: "Bearer #{token}"],
+           receive_timeout: 3000) do
+      {:ok, %{status: 200, body: body}} ->
+        org_id = body["organization"]["id"]
+        Logger.info("JWTAuth: org_id=#{org_id}")
+        org_id
+      other ->
+        Logger.warning("JWTAuth: userinfo failed: #{inspect(other)}")
+        nil
     end
   end
 end

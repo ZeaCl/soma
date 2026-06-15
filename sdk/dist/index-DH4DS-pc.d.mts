@@ -105,4 +105,12 @@ interface GliaSkillEditorProps {
 }
 declare function GliaSkillEditor({ skills, loading, onCreate, onDelete }: GliaSkillEditorProps): React.JSX.Element;
 
-export { GliaChat as G, type GliaChatColors as a, type GliaChatMessage as b, type GliaChatProps as c, GliaConversationList as d, GliaCopilot as e, GliaFileBrowser as f, GliaFileViewer as g, GliaSkillEditor as h };
+interface AgentSkillPanelProps {
+    agentId: string;
+    token: string;
+    somaUrl?: string;
+    onRefresh?: () => void;
+}
+declare function AgentSkillPanel({ agentId, token, somaUrl, onRefresh }: AgentSkillPanelProps): React.JSX.Element;
+
+export { AgentSkillPanel as A, GliaChat as G, type GliaChatColors as a, type GliaChatMessage as b, type GliaChatProps as c, GliaConversationList as d, GliaCopilot as e, GliaFileBrowser as f, GliaFileViewer as g, GliaSkillEditor as h };

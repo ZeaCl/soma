@@ -22,6 +22,9 @@ WORKDIR /app
 # ── Pi CLI (global, para subprocesos pi --mode rpc) ─────────────────
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent 2>/dev/null || true
 
+# ── Default user files (para primer arranque con volumen persistente) ─
+RUN cp /etc/passwd /etc/passwd.default && cp /etc/group /etc/group.default && cp /etc/shadow /etc/shadow.default 2>/dev/null || true
+
 # ── Soma Elixir app ─────────────────────────────────────────────────
 COPY --from=build /app/_build/prod/rel/soma ./
 

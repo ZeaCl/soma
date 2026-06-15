@@ -188,22 +188,16 @@ defmodule SomaWeb.ApiController do
   # ── Skills ─────────────────────────────────────
 
   get "/skills" do
-    org_id = conn.assigns[:org_id]
-    skills = if org_id, do: Skills.list(org_id), else: []
+    skills = Skills.list(conn.assigns[:org_id])
     send_resp(conn, 200, Jason.encode!(%{data: skills, total: length(skills)}))
   end
 
   get "/skills/:name" do
-    org_id = conn.assigns[:org_id]
-    if org_id do
-      case Skills.get(org_id, name) do
-        {:ok, content, source} ->
-          send_resp(conn, 200, Jason.encode!(%{name: name, content: content, source: source}))
-        {:error, :not_found} ->
-          send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
-      end
-    else
-      send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+    case Skills.get(conn.assigns[:org_id], name) do
+      {:ok, content, source} ->
+        send_resp(conn, 200, Jason.encode!(%{name: name, content: content, source: source}))
+      {:error, :not_found} ->
+        send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
     end
   end
 

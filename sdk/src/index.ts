@@ -10,6 +10,7 @@ export { GliaConversationList } from './components/GliaConversationList'
 export { GliaFileBrowser } from './components/GliaFileBrowser'
 export { GliaFileViewer } from './components/GliaFileViewer'
 export { GliaSkillEditor } from './components/GliaSkillEditor'
+export { AgentSkillPanel } from './components/AgentSkillPanel'
 export { SomaPanel } from './components/SomaPanel'
 export { SkillManager } from './components/SkillManager'
 

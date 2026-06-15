@@ -734,7 +734,131 @@ function GliaSkillEditor({ skills, loading, onCreate, onDelete }) {
     )
   ] }, skill.name)) });
 }
+var S2 = {
+  bg: "#0d1117",
+  row: "#161b22",
+  bc: "#21262d",
+  tx: "#e6edf3",
+  mu: "#8b949e",
+  ha: "#484f58",
+  green: "#238636",
+  red: "#f85149"};
+function AgentSkillPanel({ agentId, token, somaUrl = "http://soma.zea.localhost", onRefresh }) {
+  const [allSkills, setAllSkills] = react.useState([]);
+  const [loading, setLoading] = react.useState(true);
+  const [error, setError] = react.useState(null);
+  const [viewingSkill, setViewingSkill] = react.useState(null);
+  const [skillContent, setSkillContent] = react.useState(null);
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const api = `${somaUrl}/api/v1`;
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${api}/skills`, { headers });
+      if (res.ok) setAllSkills((await res.json()).data || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  react.useEffect(() => {
+    load();
+  }, [token, agentId]);
+  const assignedSkills = allSkills.filter((s) => (s.agents || []).includes(agentId));
+  const availableSkills = allSkills.filter((s) => !(s.agents || []).includes(agentId));
+  const assign = async (skillName) => {
+    const currentAgents = allSkills.find((s) => s.name === skillName)?.agents || [];
+    await fetch(`${api}/skills/${skillName}/agents`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ agentIds: [...currentAgents, agentId] })
+    });
+    onRefresh?.();
+    load();
+  };
+  const unassign = async (skillName) => {
+    const currentAgents = (allSkills.find((s) => s.name === skillName)?.agents || []).filter((id) => id !== agentId);
+    await fetch(`${api}/skills/${skillName}/agents`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ agentIds: currentAgents })
+    });
+    onRefresh?.();
+    load();
+  };
+  const viewContent = async (skillName) => {
+    if (viewingSkill === skillName) {
+      setViewingSkill(null);
+      return;
+    }
+    setViewingSkill(skillName);
+    try {
+      const res = await fetch(`${api}/skills/${skillName}`, { headers });
+      if (res.ok) setSkillContent((await res.json()).data?.content || null);
+    } catch {
+      setSkillContent(null);
+    }
+  };
+  if (loading) return /* @__PURE__ */ jsxRuntime.jsx("div", { style: { padding: 16, color: S2.mu, fontSize: 13 }, children: "Loading skills..." });
+  if (error) return /* @__PURE__ */ jsxRuntime.jsx("div", { style: { padding: 16, color: S2.red, fontSize: 13 }, children: error });
+  return /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { padding: 16, fontFamily: "system-ui, sans-serif", fontSize: 13, height: "100%", overflow: "auto" }, children: [
+    /* @__PURE__ */ jsxRuntime.jsxs("h3", { style: { fontSize: 14, fontWeight: 600, color: S2.tx, marginBottom: 8 }, children: [
+      "\u{1F4CB} Skills asignadas (",
+      assignedSkills.length,
+      ")"
+    ] }),
+    assignedSkills.length === 0 && /* @__PURE__ */ jsxRuntime.jsx("div", { style: { color: S2.mu, marginBottom: 16 }, children: "No hay skills asignadas a este agente." }),
+    assignedSkills.map((s) => /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { padding: "8px 12px", marginBottom: 6, background: S2.row, borderRadius: 6, border: `1px solid ${S2.bc}` }, children: [
+      /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" }, children: [
+        /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { cursor: "pointer", flex: 1 }, onClick: () => viewContent(s.name), children: [
+          /* @__PURE__ */ jsxRuntime.jsx("div", { style: { color: S2.tx, fontWeight: 500 }, children: s.name }),
+          /* @__PURE__ */ jsxRuntime.jsx("div", { style: { color: S2.ha, fontSize: 11, marginTop: 2 }, children: s.description?.slice(0, 100) })
+        ] }),
+        /* @__PURE__ */ jsxRuntime.jsx("button", { onClick: () => unassign(s.name), style: {
+          background: S2.red,
+          color: "#fff",
+          border: "none",
+          borderRadius: 4,
+          padding: "3px 8px",
+          cursor: "pointer",
+          fontSize: 10,
+          fontFamily: "inherit",
+          flexShrink: 0
+        }, children: "\u2715 Desinstalar" })
+      ] }),
+      viewingSkill === s.name && /* @__PURE__ */ jsxRuntime.jsx("div", { style: { marginTop: 8, padding: 8, background: S2.bg, borderRadius: 4, fontSize: 10, color: S2.tx, maxHeight: 150, overflow: "auto", whiteSpace: "pre-wrap", fontFamily: "monospace" }, children: skillContent || "(sin contenido)" })
+    ] }, s.name)),
+    /* @__PURE__ */ jsxRuntime.jsxs("h3", { style: { fontSize: 14, fontWeight: 600, color: S2.tx, marginBottom: 8, marginTop: 20 }, children: [
+      "\u{1F4E6} Skills disponibles (",
+      availableSkills.length,
+      ")"
+    ] }),
+    availableSkills.length === 0 && /* @__PURE__ */ jsxRuntime.jsx("div", { style: { color: S2.mu }, children: "Todas las skills est\xE1n asignadas." }),
+    availableSkills.map((s) => /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { padding: "8px 12px", marginBottom: 6, background: S2.row, borderRadius: 6, border: `1px dashed ${S2.bc}`, opacity: 0.7 }, children: [
+      /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" }, children: [
+        /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { cursor: "pointer", flex: 1 }, onClick: () => viewContent(s.name), children: [
+          /* @__PURE__ */ jsxRuntime.jsx("div", { style: { color: S2.tx, fontWeight: 500 }, children: s.name }),
+          /* @__PURE__ */ jsxRuntime.jsx("div", { style: { color: S2.ha, fontSize: 11, marginTop: 2 }, children: s.description?.slice(0, 100) })
+        ] }),
+        /* @__PURE__ */ jsxRuntime.jsx("button", { onClick: () => assign(s.name), style: {
+          background: S2.green,
+          color: "#fff",
+          border: "none",
+          borderRadius: 4,
+          padding: "3px 8px",
+          cursor: "pointer",
+          fontSize: 10,
+          fontFamily: "inherit",
+          flexShrink: 0
+        }, children: "+ Instalar" })
+      ] }),
+      viewingSkill === s.name && /* @__PURE__ */ jsxRuntime.jsx("div", { style: { marginTop: 8, padding: 8, background: S2.bg, borderRadius: 4, fontSize: 10, color: S2.tx, maxHeight: 150, overflow: "auto", whiteSpace: "pre-wrap", fontFamily: "monospace" }, children: skillContent || "(sin contenido)" })
+    ] }, s.name))
+  ] });
+}
 
+exports.AgentSkillPanel = AgentSkillPanel;
 exports.GliaChat = GliaChat;
 exports.GliaConversationList = GliaConversationList;
 exports.GliaCopilot = GliaCopilot;

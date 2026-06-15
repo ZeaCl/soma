@@ -155,7 +155,38 @@ export function useGliaSkills(token: string, baseUrl = '') {
     refresh()
   }
 
-  return { skills, loading, refresh, create, deleteSkill }
+  const assignToAgents = async (skillName: string, agentIds: string[]) => {
+    const res = await apiFetch(`${api}/skills/${skillName}/agents`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ agentIds }),
+    })
+    if (res.ok) refresh()
+    return res.ok
+  }
+
+  const getAgentSkills = async (agentId: string): Promise<string[]> => {
+    try {
+      const res = await apiFetch(`${api}/agents/${agentId}/skills`, token)
+      if (res.ok) {
+        const { data } = await res.json()
+        return Array.isArray(data) ? data.map((s: any) => typeof s === 'string' ? s : s.name) : []
+      }
+    } catch { /* offline */ }
+    return []
+  }
+
+  const getContent = async (skillName: string): Promise<string | null> => {
+    try {
+      const res = await apiFetch(`${api}/skills/${skillName}`, token)
+      if (res.ok) {
+        const { data } = await res.json()
+        return data?.content || null
+      }
+    } catch { /* offline */ }
+    return null
+  }
+
+  return { skills, loading, refresh, create, deleteSkill, assignToAgents, getAgentSkills, getContent }
 }
 
 // ── Agents ────────────────────────────────────

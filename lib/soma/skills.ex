@@ -4,20 +4,20 @@ defmodule Soma.Skills do
   import Ecto.Query
   alias Soma.{Repo, CustomSkill}
 
-  @builtin_dir "/root/.agents/skills"
+  @builtin_dir System.get_env("SKILLS_DIR", "/root/.agents/skills")
   @custom_dir "/app/.pi-agent-skills"
 
   # ── List ─────────────────────────────────────
 
   def list(org_id) when is_binary(org_id) do
-    custom = Repo.all(from s in CustomSkill, where: s.organization_id == ^org_id, select: s.name)
+    custom = Repo.all(from s in CustomSkill, where: s.organization_id == ^org_id, select: {s.name, s.content})
+    custom_names = MapSet.new(custom, fn {name, _} -> name end)
     builtin = list_builtin_skills()
-    
-    builtin_names = Enum.map(builtin, & &1.name)
-    custom_names = MapSet.new(custom)
 
-    # Builtin skills, mark custom ones and overrides
-    builtin
+    builtin_names = Enum.map(builtin, & &1.name)
+
+    # Builtin skills, mark overridden ones as custom
+    skills = builtin
     |> Enum.map(fn skill ->
       if MapSet.member?(custom_names, skill.name) do
         Map.put(skill, :custom, true)
@@ -25,10 +25,39 @@ defmodule Soma.Skills do
         Map.put(skill, :custom, false)
       end
     end)
+
+    # Add pure custom skills (not overriding any builtin)
+    pure_custom = Enum.flat_map(custom, fn {name, content} ->
+      if name in builtin_names do
+        []
+      else
+        desc = content
+          |> String.split("\n")
+          |> Enum.find(&(&1 != "" && !String.starts_with?(&1, ["---", "name:", "#"])))
+        [%{name: name, description: String.slice(desc || "", 0, 120), builtin: false, custom: true}]
+      end
+    end)
+
+    (skills ++ pure_custom)
+    |> add_agent_assignments()
     |> Enum.sort_by(& &1.name)
   end
 
-  def list(_nil), do: []
+  defp add_agent_assignments(skills) do
+    registry = read_agent_registry()
+    Enum.map(skills, fn skill ->
+      agents = Map.get(registry, skill.name, [])
+      Map.put(skill, :agents, agents)
+    end)
+  end
+
+  defp read_agent_registry do
+    reg_file = Path.join(@custom_dir, ".registry.json")
+    case File.read(reg_file) do
+      {:ok, json} -> Jason.decode!(json)
+      _ -> %{}
+    end
+  end
 
   # ── Get ──────────────────────────────────────
 

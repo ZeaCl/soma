@@ -310,7 +310,37 @@ function useGliaSkills(token, baseUrl = "") {
     await apiFetch(`${api}/skills/${name}`, token, { method: "DELETE" });
     refresh();
   };
-  return { skills, loading, refresh, create, deleteSkill };
+  const assignToAgents = async (skillName, agentIds) => {
+    const res = await apiFetch(`${api}/skills/${skillName}/agents`, token, {
+      method: "PUT",
+      body: JSON.stringify({ agentIds })
+    });
+    if (res.ok) refresh();
+    return res.ok;
+  };
+  const getAgentSkills = async (agentId) => {
+    try {
+      const res = await apiFetch(`${api}/agents/${agentId}/skills`, token);
+      if (res.ok) {
+        const { data } = await res.json();
+        return Array.isArray(data) ? data.map((s) => typeof s === "string" ? s : s.name) : [];
+      }
+    } catch {
+    }
+    return [];
+  };
+  const getContent = async (skillName) => {
+    try {
+      const res = await apiFetch(`${api}/skills/${skillName}`, token);
+      if (res.ok) {
+        const { data } = await res.json();
+        return data?.content || null;
+      }
+    } catch {
+    }
+    return null;
+  };
+  return { skills, loading, refresh, create, deleteSkill, assignToAgents, getAgentSkills, getContent };
 }
 function useGliaAgents(token, baseUrl = "") {
   const [agents, setAgents] = useState([]);

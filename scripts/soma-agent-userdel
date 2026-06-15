@@ -3,7 +3,7 @@
 # Usage: soma-agent-userdel <agent-id>
 # Requiere: root o sudo
 
-set -euo pipefail
+set -eu
 
 AGENT_ID="${1:-}"
 
@@ -26,9 +26,9 @@ fi
 # ── 2. Desmontar bind mounts ────────────────────────────────────────
 if [ -d "$HOMEDIR" ]; then
   echo "   Unmounting bind mounts under $HOMEDIR..."
-  mount | grep "$HOMEDIR" | awk '{print $3}' | while read -r mp; do
+  mount 2>/dev/null | grep "$HOMEDIR" | awk '{print $3}' | while read -r mp; do
     umount "$mp" 2>/dev/null && echo "   ✅ Unmounted: $mp" || echo "   ⚠️  Could not unmount: $mp"
-  done
+  done || true
 fi
 
 # ── 3. Matar procesos del usuario ────────────────────────────────────

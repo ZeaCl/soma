@@ -29,6 +29,9 @@ declare function useGliaSkills(token: string, baseUrl?: string): {
     refresh: () => Promise<void>;
     create: (name: string, content: string) => Promise<boolean>;
     deleteSkill: (name: string) => Promise<void>;
+    assignToAgents: (skillName: string, agentIds: string[]) => Promise<boolean>;
+    getAgentSkills: (agentId: string) => Promise<string[]>;
+    getContent: (skillName: string) => Promise<string | null>;
 };
 declare function useGliaAgents(token: string, baseUrl?: string): {
     agents: GliaAgent[];
