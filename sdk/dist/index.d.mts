@@ -5,6 +5,13 @@ export { G as GliaAgent, a as GliaConversation, b as GliaFile, c as GliaMessage,
 
 declare function SomaPanel(): React.JSX.Element;
 
+interface SkillManagerProps {
+    token: string;
+    somaUrl?: string;
+    onSkillAssigned?: () => void;
+}
+declare function SkillManager({ token, somaUrl, onSkillAssigned }: SkillManagerProps): React.JSX.Element;
+
 /**
  * SandboxProvider — abstraction for agent file storage.
  *
@@ -54,4 +61,4 @@ declare function createRestSandboxProvider(options?: RestSandboxOptions): Sandbo
 
 declare function createMemorySandboxProvider(): SandboxProvider;
 
-export { type SandboxFile, type SandboxProvider, SomaPanel, createMemorySandboxProvider, createRestSandboxProvider };
+export { type SandboxFile, type SandboxProvider, SkillManager, SomaPanel, createMemorySandboxProvider, createRestSandboxProvider };

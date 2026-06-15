@@ -17,20 +17,18 @@ defmodule Soma.Sandbox do
   Returns `{:ok, uid, home}` on success, `{:error, reason}` on failure.
   """
   def create(agent_id, org_id, opts \\ []) do
-    teams = Keyword.get(opts, :teams, "")
-    mounts = Keyword.get(opts, :mounts, [])
-
-    script = Path.join(@scripts_dir, "soma-agent-useradd")
-    args = [agent_id, org_id, teams, Jason.encode!(mounts)]
-
-    case System.cmd(script, args, stderr_to_stdout: true) do
-      {output, 0} ->
-        uid = extract_uid(output)
-        home = "/home/soma/#{agent_id}"
+    # Call agent server internal API to create Linux user
+    agent_host = Application.get_env(:soma, :agent_host) || "http://zea-agent:3001"
+    case Req.post("#{agent_host}/internal/users", json: %{agentId: agent_id}, receive_timeout: 5000) do
+      {:ok, %{status: 201, body: body}} ->
+        username = body["username"] || "soma-#{String.slice(agent_id, 0, 12)}"
+        home = body["home"] || "/home/soma/#{agent_id}"
+        uid = extract_uid_from_username(username)
         {:ok, uid, home}
-
-      {output, code} ->
-        {:error, "useradd failed (exit #{code}): #{String.slice(output, 0, 200)}"}
+      {:ok, %{status: code, body: body}} ->
+        {:error, "agent server returned #{code}: #{inspect(body)}"}
+      {:error, reason} ->
+        {:error, "agent server unreachable: #{inspect(reason)}"}
     end
   end
 
@@ -61,11 +59,10 @@ defmodule Soma.Sandbox do
 
   # ── Private ──────────────────────────────────────────────────────────
 
-  defp extract_uid(output) do
-    # Look for "uid=XXXX" in the output
-    case Regex.run(~r/uid=(\d+)/, output) do
-      [_, uid_str] -> String.to_integer(uid_str)
-      nil -> nil
+  defp extract_uid_from_username(username) do
+    case System.cmd("id", ["-u", username], stderr_to_stdout: true) do
+      {output, 0} -> String.trim(output) |> String.to_integer()
+      _ -> nil
     end
   end
 end

@@ -9,7 +9,7 @@ defmodule Soma.Skills do
 
   # ── List ─────────────────────────────────────
 
-  def list(org_id) do
+  def list(org_id) when is_binary(org_id) do
     custom = Repo.all(from s in CustomSkill, where: s.organization_id == ^org_id, select: s.name)
     builtin = list_builtin_skills()
     
@@ -27,6 +27,8 @@ defmodule Soma.Skills do
     end)
     |> Enum.sort_by(& &1.name)
   end
+
+  def list(_nil), do: []
 
   # ── Get ──────────────────────────────────────
 
@@ -105,9 +107,10 @@ defmodule Soma.Skills do
 
   # ── Agent Config ─────────────────────────────
 
-  def list_agents do
+  def list_agents(token \\ nil) do
     thalamus_url = Application.get_env(:soma, :thalamus)[:url]
-    case Req.get("#{thalamus_url}/api/users?is_agent=true", receive_timeout: 5000) do
+    headers = if token, do: [authorization: "Bearer #{token}"], else: []
+    case Req.get("#{thalamus_url}/api/users?is_agent=true", headers: headers, receive_timeout: 5000) do
       {:ok, %{status: 200, body: body}} ->
         agents = body["data"] || body["users"] || []
         {:ok, agents}
@@ -132,11 +135,12 @@ defmodule Soma.Skills do
     end
   end
 
-  def create_agent(org_id, attrs) do
+  def create_agent(org_id, attrs, token \\ nil) do
     thalamus_url = Application.get_env(:soma, :thalamus)[:url]
     body = %{
       email: attrs["email"],
       name: attrs["name"],
+      password: attrs["password"] || random_password(),
       is_agent: true,
       organization_id: org_id,
       agent_config: %{
@@ -147,7 +151,9 @@ defmodule Soma.Skills do
         workspace_paths: attrs["workspace_paths"] || []
       }
     }
-    case Req.post("#{thalamus_url}/api/users", json: body, receive_timeout: 5000) do
+    # Use internal API (no auth required for inter-service calls)
+    headers = if token, do: [authorization: "Bearer #{token}"], else: []
+    case Req.post("#{thalamus_url}/api/users", json: body, headers: headers, receive_timeout: 5000) do
       {:ok, %{status: 201, body: resp}} ->
         agent = resp["data"] || resp
         update_local_config(agent["id"], agent["agent_config"] || %{})
@@ -179,7 +185,7 @@ defmodule Soma.Skills do
   end
 
   defp update_local_config(agent_id, config) do
-    config_dir = "/root/.agents/agent-configs"
+    config_dir = "/tmp/agent-configs"
     File.mkdir_p!(config_dir)
     File.write!(
       Path.join(config_dir, "#{agent_id}.json"),
@@ -190,6 +196,10 @@ defmodule Soma.Skills do
         engine: config["engine"] || "pi"
       })
     )
+  end
+
+  defp random_password do
+    :crypto.strong_rand_bytes(16) |> Base.url_encode64(padding: false)
   end
 
   # ── App Context (AGENTS.md) ──────────────────

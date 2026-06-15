@@ -760,6 +760,96 @@ function SomaPanel() {
     navItem("skills", "Skills", "\u{1F6E0}\uFE0F")
   ] });
 }
+function SkillManager({ token, somaUrl = "http://soma.zea.localhost", onSkillAssigned }) {
+  const [skills, setSkills] = useState([]);
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newContent, setNewContent] = useState("");
+  const [assignTarget, setAssignTarget] = useState(null);
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [sr, ar] = await Promise.all([
+        fetch(`${somaUrl}/api/skills`, { headers }),
+        fetch(`${somaUrl}/api/agents`, { headers })
+      ]);
+      if (!sr.ok) throw new Error("skills: " + sr.status);
+      if (!ar.ok) throw new Error("agents: " + ar.status);
+      const sd = await sr.json();
+      const ad = await ar.json();
+      setSkills(sd.data || []);
+      setAgents(ad.data || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    load();
+  }, [token]);
+  const addSkill = async () => {
+    if (!newName.trim()) return;
+    await fetch(`${somaUrl}/api/skills`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: newName, content: newContent })
+    });
+    setNewName("");
+    setNewContent("");
+    setShowAdd(false);
+    load();
+  };
+  const assignToAgent = async (skillName, agentId) => {
+    await fetch(`${somaUrl}/api/skills/${skillName}/agents`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ agentIds: [agentId] })
+    });
+    onSkillAssigned?.();
+  };
+  const Z2 = { mu: "#8b949e", pr: "#58a6ff", tx: "#e6edf3", ha: "#484f58", b1: "#161b22", bc: "#21262d" };
+  if (loading) return /* @__PURE__ */ jsx("div", { style: { padding: 16, color: Z2.mu, fontSize: 12 }, children: "Loading skills..." });
+  if (error) return /* @__PURE__ */ jsx("div", { style: { padding: 16, color: "#f85149", fontSize: 12 }, children: error });
+  return /* @__PURE__ */ jsxs("div", { style: { fontFamily: "system-ui, sans-serif" }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px" }, children: [
+      /* @__PURE__ */ jsx("span", { style: { fontSize: 10, fontWeight: 600, color: Z2.mu, textTransform: "uppercase", letterSpacing: "0.06em" }, children: "Skills" }),
+      /* @__PURE__ */ jsx("button", { onClick: () => setShowAdd(!showAdd), style: { background: Z2.pr, color: "#fff", border: "none", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: 10, fontFamily: "inherit" }, children: "+ Add" })
+    ] }),
+    showAdd && /* @__PURE__ */ jsxs("div", { style: { padding: "0 16px 8px", display: "flex", flexDirection: "column", gap: 6 }, children: [
+      /* @__PURE__ */ jsx("input", { value: newName, onChange: (e) => setNewName(e.target.value), placeholder: "Skill name", style: { background: "#0d1117", border: `1px solid ${Z2.bc}`, borderRadius: 4, color: Z2.tx, padding: "4px 8px", fontSize: 11, fontFamily: "inherit", outline: "none" } }),
+      /* @__PURE__ */ jsx("textarea", { value: newContent, onChange: (e) => setNewContent(e.target.value), placeholder: "Skill description (optional)", rows: 2, style: { background: "#0d1117", border: `1px solid ${Z2.bc}`, borderRadius: 4, color: Z2.tx, padding: "4px 8px", fontSize: 11, fontFamily: "inherit", outline: "none", resize: "vertical" } }),
+      /* @__PURE__ */ jsx("button", { onClick: addSkill, style: { background: "#238636", color: "#fff", border: "none", borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }, children: "Create Skill" })
+    ] }),
+    skills.map((s) => /* @__PURE__ */ jsx("div", { style: { padding: "4px 16px" }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
+      /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+        /* @__PURE__ */ jsx("div", { style: { fontSize: 12, color: Z2.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: s.name }),
+        /* @__PURE__ */ jsx("div", { style: { fontSize: 10, color: Z2.ha, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: s.description })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, alignItems: "center" }, children: [
+        s.custom && /* @__PURE__ */ jsx("span", { style: { fontSize: 8, color: "#3fb950", background: "#3fb95020", padding: "1px 4px", borderRadius: 3 }, children: "custom" }),
+        /* @__PURE__ */ jsxs(
+          "select",
+          {
+            value: "",
+            onChange: (e) => {
+              if (e.target.value) assignToAgent(s.name, e.target.value);
+            },
+            style: { background: Z2.b1, border: `1px solid ${Z2.bc}`, borderRadius: 3, color: Z2.mu, fontSize: 9, fontFamily: "inherit", padding: "1px 4px", maxWidth: 80 },
+            children: [
+              /* @__PURE__ */ jsx("option", { value: "", children: "assign" }),
+              agents.map((a) => /* @__PURE__ */ jsx("option", { value: a.id, children: (a.name || "").slice(0, 12) }, a.id))
+            ]
+          }
+        )
+      ] })
+    ] }) }, s.name))
+  ] });
+}
 
 // src/sandbox/rest-provider.ts
 function createRestSandboxProvider(options = {}) {
@@ -856,6 +946,6 @@ function createMemorySandboxProvider() {
   };
 }
 
-export { GliaChat, GliaConversationList, GliaCopilot, GliaFileBrowser, GliaSkillEditor, SomaPanel, createMemorySandboxProvider, createRestSandboxProvider, useGlia, useGliaAgents, useGliaConversations, useGliaFiles, useGliaSkills };
+export { GliaChat, GliaConversationList, GliaCopilot, GliaFileBrowser, GliaSkillEditor, SkillManager, SomaPanel, createMemorySandboxProvider, createRestSandboxProvider, useGlia, useGliaAgents, useGliaConversations, useGliaFiles, useGliaSkills };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

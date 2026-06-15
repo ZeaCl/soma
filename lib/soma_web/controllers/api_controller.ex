@@ -72,9 +72,9 @@ defmodule SomaWeb.ApiController do
 
   get "/files" do
     org_id = conn.assigns[:org_id]
+    agent_id = conn.params["agent_id"]
     path = conn.params["path"] || ""
-    Workspace.ensure_org(org_id)
-    case Workspace.list_files(org_id, path) do
+    case Workspace.list_files_per_agent(org_id, agent_id, path) do
       {:ok, files} ->
         result = Enum.map(files, fn
           {name, "dir", size} -> %{name: name, type: "dir", size: size}
@@ -189,17 +189,21 @@ defmodule SomaWeb.ApiController do
 
   get "/skills" do
     org_id = conn.assigns[:org_id]
-    skills = Skills.list(org_id)
+    skills = if org_id, do: Skills.list(org_id), else: []
     send_resp(conn, 200, Jason.encode!(%{data: skills, total: length(skills)}))
   end
 
   get "/skills/:name" do
     org_id = conn.assigns[:org_id]
-    case Skills.get(org_id, name) do
-      {:ok, content, source} ->
-        send_resp(conn, 200, Jason.encode!(%{name: name, content: content, source: source}))
-      {:error, :not_found} ->
-        send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+    if org_id do
+      case Skills.get(org_id, name) do
+        {:ok, content, source} ->
+          send_resp(conn, 200, Jason.encode!(%{name: name, content: content, source: source}))
+        {:error, :not_found} ->
+          send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+      end
+    else
+      send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
     end
   end
 
@@ -243,7 +247,8 @@ defmodule SomaWeb.ApiController do
   # ── Agent Config ───────────────────────────────
 
   get "/agents" do
-    case Skills.list_agents() do
+    token = get_token(conn)
+    case Skills.list_agents(token) do
       {:ok, agents} -> send_resp(conn, 200, Jason.encode!(%{data: agents}))
     end
   end
@@ -251,8 +256,34 @@ defmodule SomaWeb.ApiController do
   post "/agents" do
     org_id = conn.assigns[:org_id]
     attrs = conn.body_params
-    case Skills.create_agent(org_id, attrs) do
-      {:ok, agent} -> send_resp(conn, 201, Jason.encode!(%{data: agent}))
+    token = get_token(conn)
+    case Skills.create_agent(org_id, attrs, token) do
+      {:ok, agent} ->
+        # Provision sandbox for the new agent
+        agent_id = agent["id"]
+        spawn(fn ->
+          case Sandbox.create(agent_id, org_id,
+            teams: attrs["teams"] || "",
+            mounts: attrs["mounts"] || []
+          ) do
+            {:ok, _uid, home} ->
+              # Copy assigned skills to the agent's sandbox
+              config = agent["agent_config"] || %{}
+              skill_names = config["skills"] || []
+              for name <- skill_names do
+                src = Path.join(["/root/.agents/skills", name])
+                dst = Path.join([home, "skills", name])
+                if File.dir?(src) do
+                  File.mkdir_p!(dst)
+                  File.cp_r!(src, dst)
+                end
+              end
+            {:error, reason} ->
+              require Logger
+              Logger.error("Sandbox creation failed for agent #{agent_id}: #{reason}")
+          end
+        end)
+        send_resp(conn, 201, Jason.encode!(%{data: agent}))
       {:error, reason} -> send_resp(conn, 422, Jason.encode!(%{error: reason}))
     end
   end
@@ -260,6 +291,22 @@ defmodule SomaWeb.ApiController do
   get "/agents/:id" do
     case Skills.get_agent(id) do
       {:ok, agent} -> send_resp(conn, 200, Jason.encode!(%{data: agent}))
+      {:error, :not_found} -> send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+    end
+  end
+
+  get "/agents/:id/skills" do
+    case Skills.get_agent(id) do
+      {:ok, agent} ->
+        config = agent["agent_config"] || %{}
+        skill_names = config["skills"] || []
+        skills = Enum.map(skill_names, fn name ->
+          case Skills.get(agent["organization_id"], name) do
+            {:ok, content, _type} -> %{name: name, content: content}
+            {:error, :not_found} -> %{name: name, error: "not_found"}
+          end
+        end)
+        send_resp(conn, 200, Jason.encode!(%{data: skills}))
       {:error, :not_found} -> send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
     end
   end
@@ -312,5 +359,12 @@ defmodule SomaWeb.ApiController do
 
   match _ do
     send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+  end
+
+  defp get_token(conn) do
+    case Plug.Conn.get_req_header(conn, "authorization") do
+      ["Bearer " <> token] -> token
+      _ -> nil
+    end
   end
 end

@@ -192,12 +192,13 @@ async function fetchAgentConfig(userId: string): Promise<AgentConfig | null> {
       const { data: user } = await res.json()
       if (user?.is_agent) {
         const skillNames: string[] = user.agent_config?.skills || []
-        const skillPaths = resolveSkillPaths(skillNames)
+        const agentHome = `/home/soma/${resolvedId.replace(/^user_/, '')}`
+        const skillPaths = resolveSkillPaths(skillNames, agentHome)
         const systemPrompt = user.agent_config?.system_prompt || null
         const workspacePaths = user.agent_config?.workspace_paths || []
         const engine = user.agent_config?.engine || 'pi'
         const zeaToken = await fetchZeaToken(resolvedId)
-        const resourceLoader = createResourceLoader(skillPaths)
+        const resourceLoader = createResourceLoader(skillPaths, agentHome)
         await resourceLoader.reload()
 
         console.log(`☁️  Config desde Thalamus: ${skillPaths.length} skills, prompt=${!!systemPrompt}, engine=${engine}`)
@@ -230,12 +231,13 @@ async function fetchAgentConfig(userId: string): Promise<AgentConfig | null> {
   return null
 }
 
-function resolveSkillPaths(names: string[]): string[] {
+function resolveSkillPaths(names: string[], agentHome?: string): string[] {
+  const baseDir = agentHome ? `${agentHome}/skills` : SKILLS_DIR
   const paths = names
     .map((name: string) => {
-      const dir = join(SKILLS_DIR, name)
+      const dir = join(baseDir, name)
       if (existsSync(dir)) return dir
-      const altDir = join(SKILLS_DIR, name.replace(/^zea-/, ''))
+      const altDir = join(baseDir, name.replace(/^zea-/, ''))
       if (existsSync(altDir)) return altDir
       return null
     })
@@ -256,20 +258,14 @@ function resolveSkillPaths(names: string[]): string[] {
   return paths
 }
 
-function createResourceLoader(skillPaths: string[]) {
+function createResourceLoader(skillPaths: string[], agentHome?: string) {
+  console.log(`[rl] creating loader with skillPaths: ${JSON.stringify(skillPaths)} agentHome: ${agentHome}`)
   return new DefaultResourceLoader({
-    cwd: process.cwd(),
+    cwd: agentHome ? `${agentHome}/workspace` : process.cwd(),
     agentDir: '/app/.pi-agent',
-    noSkills: false,
-    skillsOverride: (base: any) => {
-      const filtered = skillPaths.length > 0
-        ? base.skills.filter((s: any) =>
-            skillPaths.some((a: string) => s.filePath.startsWith(a) || s.baseDir?.startsWith(a))
-          )
-        : []
-      return { ...base, skills: filtered }
-    },
-  })
+    noSkills: true,
+    additionalSkillPaths: skillPaths.length > 0 ? skillPaths : [],
+  });
 }
 
 async function fetchZeaToken(userId: string): Promise<string> {

@@ -16,6 +16,8 @@ config :soma, :thalamus,
   url: System.get_env("THALAMUS_URL", "http://thalamus:4000"),
   jwks_url: "http://thalamus:4000/.well-known/jwks.json"
 
+config :soma, :agent_host, System.get_env("AGENT_HOST", "http://zea-agent:3001")
+
 config :logger, level: :info
 
 import_config "#{config_env()}.exs"

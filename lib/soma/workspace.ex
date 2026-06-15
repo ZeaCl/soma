@@ -33,7 +33,21 @@ defmodule Soma.Workspace do
 
   # ── List ─────────────────────────────────────
 
-  def list_files(org_id, sub_path \\ "") do
+  def list_files_per_agent(org_id, agent_id, sub_path \\ "") do
+    if agent_id && agent_id != "" do
+      # Agent sandbox: /home/soma/<agent_id>/workspace
+      base = "/home/soma/#{agent_id}/workspace"
+      dir = if sub_path == "", do: base, else: Path.join(base, sub_path)
+      if File.dir?(dir) do
+        {:ok, scan_dir(dir, dir, "")}
+      else
+        {:ok, []}
+      end
+    else
+      # Fallback: org workspace
+      list_files(org_id, sub_path)
+    end
+  end
     {:ok, dir} = resolve(org_id, sub_path)
     if File.dir?(dir) do
       {:ok, scan_dir(dir, dir, "")}
