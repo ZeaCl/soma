@@ -1,6 +1,6 @@
 // Hooks
 export { useGlia } from './hooks/useGlia'
-export { useGliaConversations, useGliaFiles, useGliaSkills, useGliaAgents } from './hooks/api'
+export { useGliaConversations, useGliaFiles, useGliaFileContent, useGliaSkills, useGliaAgents } from './hooks/api'
 
 // Components
 export { GliaChat } from './components/GliaChat'
@@ -8,6 +8,7 @@ export type { GliaChatProps, GliaChatColors, GliaChatMessage } from './component
 export { GliaCopilot } from './components/GliaCopilot'
 export { GliaConversationList } from './components/GliaConversationList'
 export { GliaFileBrowser } from './components/GliaFileBrowser'
+export { GliaFileViewer } from './components/GliaFileViewer'
 export { GliaSkillEditor } from './components/GliaSkillEditor'
 export { SomaPanel } from './components/SomaPanel'
 export { SkillManager } from './components/SkillManager'

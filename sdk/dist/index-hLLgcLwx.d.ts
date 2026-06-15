@@ -83,8 +83,19 @@ interface GliaFileBrowserProps {
     onMkdir?: (path: string) => Promise<void>;
     onDelete?: (path: string) => Promise<void>;
     onRename?: (path: string, newName: string) => Promise<void>;
+    /** Si se provee, muestra contenido del archivo al clickear */
+    readFile?: (path: string) => Promise<string | null>;
 }
-declare function GliaFileBrowser({ files, loading, onSelect }: GliaFileBrowserProps): React.JSX.Element;
+declare function GliaFileBrowser({ files, loading, onSelect, readFile }: GliaFileBrowserProps): React.JSX.Element;
+
+interface GliaFileViewerProps {
+    content: string | null;
+    fileName?: string;
+    loading?: boolean;
+    error?: string | null;
+    onClose?: () => void;
+}
+declare function GliaFileViewer({ content, fileName, loading, error, onClose }: GliaFileViewerProps): React.JSX.Element;
 
 interface GliaSkillEditorProps {
     skills: GliaSkill[];
@@ -94,4 +105,4 @@ interface GliaSkillEditorProps {
 }
 declare function GliaSkillEditor({ skills, loading, onCreate, onDelete }: GliaSkillEditorProps): React.JSX.Element;
 
-export { GliaChat as G, type GliaChatColors as a, type GliaChatMessage as b, type GliaChatProps as c, GliaConversationList as d, GliaCopilot as e, GliaFileBrowser as f, GliaSkillEditor as g };
+export { GliaChat as G, type GliaChatColors as a, type GliaChatMessage as b, type GliaChatProps as c, GliaConversationList as d, GliaCopilot as e, GliaFileBrowser as f, GliaFileViewer as g, GliaSkillEditor as h };

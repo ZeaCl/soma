@@ -1,2 +1,2 @@
 export { useGlia } from './useGlia'
-export { useGliaConversations, useGliaFiles, useGliaSkills, useGliaAgents } from './api'
+export { useGliaConversations, useGliaFiles, useGliaFileContent, useGliaSkills, useGliaAgents } from './api'

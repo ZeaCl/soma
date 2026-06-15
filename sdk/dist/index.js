@@ -180,16 +180,21 @@ function useGlia(options) {
   }, [connect]);
   return { send, cancel, isConnected, isStreaming, messages, streamContent, reconnect };
 }
-var apiFetch = (url, options = {}) => fetch(url, options);
-function useGliaConversations(apiKey, baseUrl = "") {
+var apiFetch = (url, token, options = {}) => fetch(url, {
+  ...options,
+  headers: {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+    ...options.headers
+  }
+});
+function useGliaConversations(token, baseUrl = "") {
   const [conversations, setConversations] = react.useState([]);
   const [loading, setLoading] = react.useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = react.useCallback(async () => {
     try {
-      const res = await apiFetch(`${api}/conversations`, {
-        headers: { "x-api-key": apiKey }
-      });
+      const res = await apiFetch(`${api}/conversations`, token);
       if (res.ok) {
         const { data } = await res.json();
         setConversations(data);
@@ -197,22 +202,20 @@ function useGliaConversations(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   react.useEffect(() => {
     refresh();
   }, [refresh]);
   return { conversations, loading, refresh };
 }
-function useGliaFiles(apiKey, baseUrl = "") {
+function useGliaFiles(token, baseUrl = "") {
   const [files, setFiles] = react.useState([]);
   const [loading, setLoading] = react.useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = react.useCallback(async (subpath = "") => {
     setLoading(true);
     try {
-      const res = await apiFetch(`${api}/files?path=${encodeURIComponent(subpath)}`, {
-        headers: { "x-api-key": apiKey }
-      });
+      const res = await apiFetch(`${api}/files?path=${encodeURIComponent(subpath)}`, token);
       if (res.ok) {
         const { files: data } = await res.json();
         setFiles(data);
@@ -220,51 +223,73 @@ function useGliaFiles(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   react.useEffect(() => {
     refresh();
   }, [refresh]);
   const upload = async (name, data, path = "") => {
-    const res = await apiFetch(`${api}/files/upload`, {
+    const res = await apiFetch(`${api}/files/upload`, token, {
       method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ name, data, path })
     });
     if (res.ok) refresh(path);
     return res.ok;
   };
   const mkdir = async (path) => {
-    const res = await apiFetch(`${api}/files/mkdir`, {
+    const res = await apiFetch(`${api}/files/mkdir`, token, {
       method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ path })
     });
     if (res.ok) refresh();
   };
   const remove = async (path) => {
-    const res = await apiFetch(`${api}/files?path=${encodeURIComponent(path)}`, {
-      method: "DELETE",
-      headers: { "x-api-key": apiKey }
-    });
-    if (res.ok) refresh();
+    await apiFetch(`${api}/files?path=${encodeURIComponent(path)}`, token, { method: "DELETE" });
+    refresh();
   };
   const rename = async (path, newName) => {
-    const res = await apiFetch(`${api}/files/rename`, {
+    const res = await apiFetch(`${api}/files/rename`, token, {
       method: "PUT",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ path, newName })
     });
     if (res.ok) refresh();
   };
   return { files, loading, refresh, upload, mkdir, remove, rename };
 }
-function useGliaSkills(apiKey, baseUrl = "") {
+function useGliaFileContent(token, baseUrl = "") {
+  const [content, setContent] = react.useState(null);
+  const [loading, setLoading] = react.useState(false);
+  const [error, setError] = react.useState(null);
+  const api = `${baseUrl || ""}/api/v1`;
+  const readFile = react.useCallback(async (path) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`${api}/files/content?path=${encodeURIComponent(path)}`, token);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      setContent(text);
+      return text;
+    } catch (e) {
+      setError(e.message);
+      setContent(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [api, token]);
+  const clear = react.useCallback(() => {
+    setContent(null);
+    setError(null);
+  }, []);
+  return { content, loading, error, readFile, clear };
+}
+function useGliaSkills(token, baseUrl = "") {
   const [skills, setSkills] = react.useState([]);
   const [loading, setLoading] = react.useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = react.useCallback(async () => {
     try {
-      const res = await apiFetch(`${api}/skills`, { headers: { "x-api-key": apiKey } });
+      const res = await apiFetch(`${api}/skills`, token);
       if (res.ok) {
         const { data } = await res.json();
         setSkills(data);
@@ -272,35 +297,31 @@ function useGliaSkills(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   react.useEffect(() => {
     refresh();
   }, [refresh]);
   const create = async (name, content) => {
-    const res = await apiFetch(`${api}/skills`, {
+    const res = await apiFetch(`${api}/skills`, token, {
       method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ name, content })
     });
     if (res.ok) refresh();
     return res.ok;
   };
   const deleteSkill = async (name) => {
-    await apiFetch(`${api}/skills/${name}`, {
-      method: "DELETE",
-      headers: { "x-api-key": apiKey }
-    });
+    await apiFetch(`${api}/skills/${name}`, token, { method: "DELETE" });
     refresh();
   };
   return { skills, loading, refresh, create, deleteSkill };
 }
-function useGliaAgents(apiKey, baseUrl = "") {
+function useGliaAgents(token, baseUrl = "") {
   const [agents, setAgents] = react.useState([]);
   const [loading, setLoading] = react.useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = react.useCallback(async () => {
     try {
-      const res = await apiFetch(`${api}/agents`, { headers: { "x-api-key": apiKey } });
+      const res = await apiFetch(`${api}/agents`, token);
       if (res.ok) {
         const { data } = await res.json();
         setAgents(data);
@@ -308,11 +329,24 @@ function useGliaAgents(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   react.useEffect(() => {
     refresh();
   }, [refresh]);
-  return { agents, loading, refresh };
+  const createAgent = async (data) => {
+    const res = await apiFetch(`${api}/agents`, token, {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const { data: agent } = await res.json();
+    setAgents((prev) => [...prev, agent]);
+    return agent;
+  };
+  return { agents, loading, refresh, createAgent };
 }
 var defaultColors = {
   bg: "var(--glia-bg, transparent)",
@@ -689,25 +723,166 @@ function GliaConversationList({ conversations, activeId, onSelect, agents = [] }
     ))
   ] });
 }
-function GliaFileBrowser({ files, loading, onSelect }) {
-  if (loading) return /* @__PURE__ */ jsxRuntime.jsx("div", { className: "p-4 text-sm text-gray-400", children: "Cargando..." });
-  if (files.length === 0) return /* @__PURE__ */ jsxRuntime.jsx("div", { className: "p-4 text-sm text-gray-400", children: "No hay archivos" });
-  return /* @__PURE__ */ jsxRuntime.jsx("div", { className: "flex flex-col text-sm", children: files.map((f, i) => /* @__PURE__ */ jsxRuntime.jsxs(
-    "button",
-    {
-      onClick: () => onSelect?.(f),
-      className: "flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 text-left",
-      children: [
-        /* @__PURE__ */ jsxRuntime.jsx("span", { children: f.type === "dir" ? "\u{1F4C1}" : f.ext === ".md" ? "\u{1F4DD}" : "\u{1F4C4}" }),
-        /* @__PURE__ */ jsxRuntime.jsx("span", { className: "truncate flex-1", children: f.name }),
-        f.type === "file" && /* @__PURE__ */ jsxRuntime.jsxs("span", { className: "text-xs text-gray-400", children: [
-          Math.round(f.size / 1024),
-          "KB"
+var S = {
+  bg: "#0d1117",
+  row: "#161b22",
+  bc: "#21262d",
+  tx: "#e6edf3",
+  mu: "#8b949e",
+  pr: "#58a6ff"};
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+function fileIcon(f) {
+  if (f.type === "dir") return "\u{1F4C1}";
+  const ext = f.ext?.toLowerCase() || "";
+  if ([".md", ".markdown"].includes(ext)) return "\u{1F4DD}";
+  if ([".json"].includes(ext)) return "\u{1F4CB}";
+  if ([".js", ".ts", ".tsx", ".jsx"].includes(ext)) return "\u26A1";
+  if ([".txt", ".log"].includes(ext)) return "\u{1F4C4}";
+  if ([".csv", ".xlsx", ".xls"].includes(ext)) return "\u{1F4CA}";
+  if ([".png", ".jpg", ".jpeg", ".gif", ".svg"].includes(ext)) return "\u{1F5BC}\uFE0F";
+  return "\u{1F4C4}";
+}
+function GliaFileBrowser({ files, loading, onSelect, readFile }) {
+  const [viewingFile, setViewingFile] = react.useState(null);
+  const [currentPath, setCurrentPath] = react.useState("");
+  const handleFileClick = async (f) => {
+    if (f.type === "dir") {
+      setCurrentPath(f.name);
+      onSelect?.(f);
+      return;
+    }
+    if (readFile) {
+      setViewingFile({ name: f.name, content: null, loading: true });
+      const content = await readFile(f.name);
+      setViewingFile({ name: f.name, content, loading: false });
+    } else {
+      onSelect?.(f);
+    }
+  };
+  const closeViewer = () => setViewingFile(null);
+  if (loading) {
+    return /* @__PURE__ */ jsxRuntime.jsx("div", { style: { padding: 16, color: S.mu, fontSize: 13, fontFamily: "system-ui, sans-serif" }, children: "Cargando archivos..." });
+  }
+  if (files.length === 0) {
+    return /* @__PURE__ */ jsxRuntime.jsx("div", { style: { padding: 16, color: S.mu, fontSize: 13, fontFamily: "system-ui, sans-serif" }, children: "No hay archivos." });
+  }
+  const sorted = [...files].sort((a, b) => {
+    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  if (viewingFile) {
+    return /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { height: "100%", display: "flex", flexDirection: "column", fontFamily: "system-ui, sans-serif" }, children: [
+      /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: `1px solid ${S.bc}`, background: S.row }, children: [
+        /* @__PURE__ */ jsxRuntime.jsxs("span", { style: { fontSize: 12, color: S.tx }, children: [
+          "\u{1F4C4} ",
+          viewingFile.name
+        ] }),
+        /* @__PURE__ */ jsxRuntime.jsx("button", { onClick: closeViewer, style: { background: "none", border: "none", color: S.mu, cursor: "pointer", fontSize: 16 }, children: "\u2190 Volver" })
+      ] }),
+      /* @__PURE__ */ jsxRuntime.jsx("div", { style: { flex: 1, overflow: "auto", padding: 16, background: S.bg, color: S.tx, fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }, children: viewingFile.loading ? "Cargando..." : viewingFile.content || "(archivo vac\xEDo)" })
+    ] });
+  }
+  return /* @__PURE__ */ jsxRuntime.jsx("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13 }, children: /* @__PURE__ */ jsxRuntime.jsxs("table", { style: { width: "100%", borderCollapse: "collapse" }, children: [
+    /* @__PURE__ */ jsxRuntime.jsx("thead", { children: /* @__PURE__ */ jsxRuntime.jsxs("tr", { style: { borderBottom: `1px solid ${S.bc}` }, children: [
+      /* @__PURE__ */ jsxRuntime.jsx("th", { style: { padding: "6px 12px", textAlign: "left", color: S.mu, fontWeight: 500, width: 30 } }),
+      /* @__PURE__ */ jsxRuntime.jsx("th", { style: { padding: "6px 12px", textAlign: "left", color: S.mu, fontWeight: 500 }, children: "Nombre" }),
+      /* @__PURE__ */ jsxRuntime.jsx("th", { style: { padding: "6px 12px", textAlign: "left", color: S.mu, fontWeight: 500, width: 70 }, children: "Tipo" }),
+      /* @__PURE__ */ jsxRuntime.jsx("th", { style: { padding: "6px 12px", textAlign: "right", color: S.mu, fontWeight: 500, width: 80 }, children: "Tama\xF1o" })
+    ] }) }),
+    /* @__PURE__ */ jsxRuntime.jsx("tbody", { children: sorted.map((f, i) => /* @__PURE__ */ jsxRuntime.jsxs(
+      "tr",
+      {
+        onClick: () => handleFileClick(f),
+        style: {
+          cursor: "pointer",
+          borderBottom: `1px solid ${S.bc}`,
+          background: i % 2 === 0 ? S.row : S.bg
+        },
+        onMouseEnter: (e) => e.currentTarget.style.background = `${S.pr}10`,
+        onMouseLeave: (e) => e.currentTarget.style.background = i % 2 === 0 ? S.row : S.bg,
+        children: [
+          /* @__PURE__ */ jsxRuntime.jsx("td", { style: { padding: "6px 12px", textAlign: "center" }, children: fileIcon(f) }),
+          /* @__PURE__ */ jsxRuntime.jsx("td", { style: { padding: "6px 12px", color: f.type === "dir" ? S.pr : S.tx }, children: f.name }),
+          /* @__PURE__ */ jsxRuntime.jsx("td", { style: { padding: "6px 12px", color: S.mu }, children: f.type === "dir" ? "Directorio" : f.ext || "archivo" }),
+          /* @__PURE__ */ jsxRuntime.jsx("td", { style: { padding: "6px 12px", textAlign: "right", color: S.mu }, children: f.type === "file" ? formatSize(f.size) : "\u2014" })
+        ]
+      },
+      i
+    )) })
+  ] }) });
+}
+function GliaFileViewer({ content, fileName, loading, error, onClose }) {
+  if (loading) {
+    return /* @__PURE__ */ jsxRuntime.jsx("div", { style: { padding: 16, color: "#8b949e", fontSize: 13, fontFamily: "system-ui, sans-serif" }, children: "Cargando contenido..." });
+  }
+  if (error) {
+    return /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { padding: 16, color: "#f85149", fontSize: 13, fontFamily: "system-ui, sans-serif" }, children: [
+      "Error: ",
+      error
+    ] });
+  }
+  if (content === null) {
+    return /* @__PURE__ */ jsxRuntime.jsx("div", { style: { padding: 16, color: "#8b949e", fontSize: 13, fontFamily: "system-ui, sans-serif" }, children: "Seleccion\xE1 un archivo para ver su contenido." });
+  }
+  const isMarkdown = fileName?.endsWith(".md");
+  const ext = fileName?.split(".").pop()?.toLowerCase();
+  return /* @__PURE__ */ jsxRuntime.jsxs("div", { style: { height: "100%", display: "flex", flexDirection: "column", fontFamily: "system-ui, sans-serif" }, children: [
+    /* @__PURE__ */ jsxRuntime.jsxs("div", { style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "8px 12px",
+      borderBottom: "1px solid #21262d",
+      background: "#161b22",
+      flexShrink: 0
+    }, children: [
+      /* @__PURE__ */ jsxRuntime.jsxs("span", { style: { fontSize: 12, color: "#8b949e" }, children: [
+        "\u{1F4C4} ",
+        fileName || "archivo",
+        ext && /* @__PURE__ */ jsxRuntime.jsxs("span", { style: { marginLeft: 8, color: "#484f58" }, children: [
+          ".",
+          ext
         ] })
-      ]
-    },
-    i
-  )) });
+      ] }),
+      onClose && /* @__PURE__ */ jsxRuntime.jsx(
+        "button",
+        {
+          onClick: onClose,
+          style: { background: "none", border: "none", color: "#8b949e", cursor: "pointer", fontSize: 16, padding: 0 },
+          children: "\u2715"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntime.jsx("div", { style: {
+      flex: 1,
+      overflow: "auto",
+      padding: 16,
+      background: "#0d1117",
+      color: "#e6edf3",
+      fontSize: 13,
+      lineHeight: 1.6,
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+      fontFamily: isMarkdown ? "system-ui, sans-serif" : "'SF Mono', 'Fira Code', monospace"
+    }, children: content }),
+    /* @__PURE__ */ jsxRuntime.jsxs("div", { style: {
+      padding: "4px 12px",
+      borderTop: "1px solid #21262d",
+      background: "#161b22",
+      fontSize: 10,
+      color: "#484f58",
+      flexShrink: 0
+    }, children: [
+      content.length.toLocaleString(),
+      " bytes \xB7 ",
+      content.split("\n").length,
+      " l\xEDneas"
+    ] })
+  ] });
 }
 function GliaSkillEditor({ skills, loading, onCreate, onDelete }) {
   if (loading) return /* @__PURE__ */ jsxRuntime.jsx("div", { className: "p-4 text-sm text-gray-400", children: "Cargando..." });
@@ -952,6 +1127,7 @@ exports.GliaChat = GliaChat;
 exports.GliaConversationList = GliaConversationList;
 exports.GliaCopilot = GliaCopilot;
 exports.GliaFileBrowser = GliaFileBrowser;
+exports.GliaFileViewer = GliaFileViewer;
 exports.GliaSkillEditor = GliaSkillEditor;
 exports.SkillManager = SkillManager;
 exports.SomaPanel = SomaPanel;
@@ -960,6 +1136,7 @@ exports.createRestSandboxProvider = createRestSandboxProvider;
 exports.useGlia = useGlia;
 exports.useGliaAgents = useGliaAgents;
 exports.useGliaConversations = useGliaConversations;
+exports.useGliaFileContent = useGliaFileContent;
 exports.useGliaFiles = useGliaFiles;
 exports.useGliaSkills = useGliaSkills;
 //# sourceMappingURL=index.js.map

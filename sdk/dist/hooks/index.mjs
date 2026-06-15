@@ -177,16 +177,21 @@ function useGlia(options) {
   }, [connect]);
   return { send, cancel, isConnected, isStreaming, messages, streamContent, reconnect };
 }
-var apiFetch = (url, options = {}) => fetch(url, options);
-function useGliaConversations(apiKey, baseUrl = "") {
+var apiFetch = (url, token, options = {}) => fetch(url, {
+  ...options,
+  headers: {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+    ...options.headers
+  }
+});
+function useGliaConversations(token, baseUrl = "") {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = useCallback(async () => {
     try {
-      const res = await apiFetch(`${api}/conversations`, {
-        headers: { "x-api-key": apiKey }
-      });
+      const res = await apiFetch(`${api}/conversations`, token);
       if (res.ok) {
         const { data } = await res.json();
         setConversations(data);
@@ -194,22 +199,20 @@ function useGliaConversations(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   useEffect(() => {
     refresh();
   }, [refresh]);
   return { conversations, loading, refresh };
 }
-function useGliaFiles(apiKey, baseUrl = "") {
+function useGliaFiles(token, baseUrl = "") {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = useCallback(async (subpath = "") => {
     setLoading(true);
     try {
-      const res = await apiFetch(`${api}/files?path=${encodeURIComponent(subpath)}`, {
-        headers: { "x-api-key": apiKey }
-      });
+      const res = await apiFetch(`${api}/files?path=${encodeURIComponent(subpath)}`, token);
       if (res.ok) {
         const { files: data } = await res.json();
         setFiles(data);
@@ -217,51 +220,73 @@ function useGliaFiles(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   useEffect(() => {
     refresh();
   }, [refresh]);
   const upload = async (name, data, path = "") => {
-    const res = await apiFetch(`${api}/files/upload`, {
+    const res = await apiFetch(`${api}/files/upload`, token, {
       method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ name, data, path })
     });
     if (res.ok) refresh(path);
     return res.ok;
   };
   const mkdir = async (path) => {
-    const res = await apiFetch(`${api}/files/mkdir`, {
+    const res = await apiFetch(`${api}/files/mkdir`, token, {
       method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ path })
     });
     if (res.ok) refresh();
   };
   const remove = async (path) => {
-    const res = await apiFetch(`${api}/files?path=${encodeURIComponent(path)}`, {
-      method: "DELETE",
-      headers: { "x-api-key": apiKey }
-    });
-    if (res.ok) refresh();
+    await apiFetch(`${api}/files?path=${encodeURIComponent(path)}`, token, { method: "DELETE" });
+    refresh();
   };
   const rename = async (path, newName) => {
-    const res = await apiFetch(`${api}/files/rename`, {
+    const res = await apiFetch(`${api}/files/rename`, token, {
       method: "PUT",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ path, newName })
     });
     if (res.ok) refresh();
   };
   return { files, loading, refresh, upload, mkdir, remove, rename };
 }
-function useGliaSkills(apiKey, baseUrl = "") {
+function useGliaFileContent(token, baseUrl = "") {
+  const [content, setContent] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const api = `${baseUrl || ""}/api/v1`;
+  const readFile = useCallback(async (path) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`${api}/files/content?path=${encodeURIComponent(path)}`, token);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      setContent(text);
+      return text;
+    } catch (e) {
+      setError(e.message);
+      setContent(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [api, token]);
+  const clear = useCallback(() => {
+    setContent(null);
+    setError(null);
+  }, []);
+  return { content, loading, error, readFile, clear };
+}
+function useGliaSkills(token, baseUrl = "") {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = useCallback(async () => {
     try {
-      const res = await apiFetch(`${api}/skills`, { headers: { "x-api-key": apiKey } });
+      const res = await apiFetch(`${api}/skills`, token);
       if (res.ok) {
         const { data } = await res.json();
         setSkills(data);
@@ -269,35 +294,31 @@ function useGliaSkills(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   useEffect(() => {
     refresh();
   }, [refresh]);
   const create = async (name, content) => {
-    const res = await apiFetch(`${api}/skills`, {
+    const res = await apiFetch(`${api}/skills`, token, {
       method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ name, content })
     });
     if (res.ok) refresh();
     return res.ok;
   };
   const deleteSkill = async (name) => {
-    await apiFetch(`${api}/skills/${name}`, {
-      method: "DELETE",
-      headers: { "x-api-key": apiKey }
-    });
+    await apiFetch(`${api}/skills/${name}`, token, { method: "DELETE" });
     refresh();
   };
   return { skills, loading, refresh, create, deleteSkill };
 }
-function useGliaAgents(apiKey, baseUrl = "") {
+function useGliaAgents(token, baseUrl = "") {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const api = `${baseUrl || ""}/api/v1`;
   const refresh = useCallback(async () => {
     try {
-      const res = await apiFetch(`${api}/agents`, { headers: { "x-api-key": apiKey } });
+      const res = await apiFetch(`${api}/agents`, token);
       if (res.ok) {
         const { data } = await res.json();
         setAgents(data);
@@ -305,13 +326,26 @@ function useGliaAgents(apiKey, baseUrl = "") {
     } catch {
     }
     setLoading(false);
-  }, [api, apiKey]);
+  }, [api, token]);
   useEffect(() => {
     refresh();
   }, [refresh]);
-  return { agents, loading, refresh };
+  const createAgent = async (data) => {
+    const res = await apiFetch(`${api}/agents`, token, {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const { data: agent } = await res.json();
+    setAgents((prev) => [...prev, agent]);
+    return agent;
+  };
+  return { agents, loading, refresh, createAgent };
 }
 
-export { useGlia, useGliaAgents, useGliaConversations, useGliaFiles, useGliaSkills };
+export { useGlia, useGliaAgents, useGliaConversations, useGliaFileContent, useGliaFiles, useGliaSkills };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map
