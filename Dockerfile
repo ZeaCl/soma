@@ -16,19 +16,31 @@ RUN mix compile
 RUN mix release
 
 FROM alpine:3.21.3 AS runtime
-RUN apk add --no-cache ncurses-libs openssl libstdc++ bash nodejs npm git docker-cli docker-cli-compose
+RUN apk add --no-cache ncurses-libs openssl libstdc++ bash nodejs npm git docker-cli docker-cli-compose shadow
 WORKDIR /app
 
-# Soma Elixir app
+# ── Pi CLI (global, para subprocesos pi --mode rpc) ─────────────────
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent 2>/dev/null || true
+
+# ── Soma Elixir app ─────────────────────────────────────────────────
 COPY --from=build /app/_build/prod/rel/soma ./
 
-# Pi sidecar (Node.js)
+# ── Pi sidecar (Node.js): orquestador de subprocesos ────────────────
 COPY server/package.json /app/server/package.json
 WORKDIR /app/server
 RUN npm install --omit=dev 2>/dev/null || true
 COPY server/agent-rpc.ts /app/server/agent-rpc.ts
-COPY server/engines/ /app/server/engines/
+COPY server/agent-sandbox.ts /app/server/agent-sandbox.ts
+COPY server/rpc-bridge.ts /app/server/rpc-bridge.ts
 WORKDIR /app
+
+# ── Scripts de sandbox (useradd/userdel) ────────────────────────────
+COPY scripts/soma-agent-useradd /usr/local/bin/soma-agent-useradd
+COPY scripts/soma-agent-userdel /usr/local/bin/soma-agent-userdel
+RUN chmod +x /usr/local/bin/soma-agent-useradd /usr/local/bin/soma-agent-userdel
+
+# ── Directorios base para el sandbox multi-agente ───────────────────
+RUN mkdir -p /home/soma /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh

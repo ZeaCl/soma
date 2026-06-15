@@ -17,18 +17,20 @@ defmodule Soma.Sandbox do
   Returns `{:ok, uid, home}` on success, `{:error, reason}` on failure.
   """
   def create(agent_id, org_id, opts \\ []) do
-    # Call agent server internal API to create Linux user
-    agent_host = Application.get_env(:soma, :agent_host) || "http://zea-agent:3001"
-    case Req.post("#{agent_host}/internal/users", json: %{agentId: agent_id}, receive_timeout: 5000) do
-      {:ok, %{status: 201, body: body}} ->
-        username = body["username"] || "soma-#{String.slice(agent_id, 0, 12)}"
-        home = body["home"] || "/home/soma/#{agent_id}"
+    script = Path.join(@scripts_dir, "soma-agent-useradd")
+    teams = Keyword.get(opts, :teams, "")
+    mounts = Keyword.get(opts, :mounts, [])
+    mounts_json = Jason.encode!(mounts)
+    args = [agent_id, org_id, teams, mounts_json]
+
+    case System.cmd(script, args, stderr_to_stdout: true) do
+      {_output, 0} ->
+        username = "soma-#{String.slice(agent_id, 0, 12)}"
+        home = "/home/soma/#{agent_id}"
         uid = extract_uid_from_username(username)
         {:ok, uid, home}
-      {:ok, %{status: code, body: body}} ->
-        {:error, "agent server returned #{code}: #{inspect(body)}"}
-      {:error, reason} ->
-        {:error, "agent server unreachable: #{inspect(reason)}"}
+      {output, code} ->
+        {:error, "useradd failed (exit #{code}): #{String.slice(output, 0, 200)}"}
     end
   end
 

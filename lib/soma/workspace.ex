@@ -44,15 +44,8 @@ defmodule Soma.Workspace do
         {:ok, []}
       end
     else
-      # Fallback: org workspace
-      list_files(org_id, sub_path)
-    end
-  end
-    {:ok, dir} = resolve(org_id, sub_path)
-    if File.dir?(dir) do
-      {:ok, scan_dir(dir, dir, "")}
-    else
-      {:error, :not_found}
+      # Fallback: no agent specified
+      {:ok, []}
     end
   end
 

@@ -1,9 +1,9 @@
 /**
- * Agent RPC WebSocket — Multi-engine agent runtime.
+ * Agent RPC WebSocket + HTTP — orquestador multi-agente con aislamiento real.
  *
- * Corre en :3002. Usa EngineRegistry para rutear agentes a su motor
- * (Pi, ReAct, OpenCode, Hermes, Goose). Skills desde Thalamus,
- * system prompt dinámico, OS-level sandbox.
+ * Corre en :3002. Cada agente corre como subproceso `pi --mode rpc`
+ * bajo su propio usuario Linux (creado vía agent-sandbox.ts).
+ * Skills, workspace y sesiones aisladas por filesystem (permisos UNIX).
  *
  * Para probar: ws://soma.zea.localhost/agent-ws
  */
@@ -12,40 +12,16 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, watch } from 'fs'
 import { join } from 'path'
-import { randomUUID } from 'crypto'
-import {
-  AuthStorage,
-  ModelRegistry,
-  DefaultResourceLoader,
-} from '@earendil-works/pi-coding-agent'
 
-// ── Engine Registry ──────────────────────────────────────────────────
-import { EngineRegistry } from './engines/registry'
-import { PiEngine } from './engines/pi-engine'
-import { ReActEngine } from './engines/react-engine'
-import { OpenCodeEngine } from './engines/opencode-engine'
-import { HermesEngine } from './engines/hermes-engine'
-import { GooseEngine } from './engines/goose-engine'
-import type { AgentConfig as EngineAgentConfig, AgentSession } from './engines/types'
-
-// Register available engines at startup
-EngineRegistry.register('pi', PiEngine)
-EngineRegistry.register('react', ReActEngine)
-EngineRegistry.register('opencode', OpenCodeEngine)
-EngineRegistry.register('hermes', HermesEngine)
-EngineRegistry.register('goose', GooseEngine)
+// ── Sandbox + RPC Bridge ──────────────────────────────────────────────────
+import { prepareAgent, destroyAgent, sandboxExists, sandboxUsername } from './agent-sandbox'
+import { RpcBridge } from './rpc-bridge'
 
 const PORT = parseInt(process.env.AGENT_RPC_PORT || '3002', 10)
-const SESSION_DIR = process.env.PI_SESSION_DIR || '/app/.pi-agent-sessions'
 const THALAMUS_URL = process.env.THALAMUS_URL || 'http://thalamus:4000'
 const SKILLS_DIR = '/root/.agents/skills'
 const SKILLS_CUSTOM_DIR = '/app/.pi-agent-skills'
 let skillsVersion = 0
-const AGENT_CONFIG_DIR = '/root/.agents/agent-configs'
-const CONFIG_RETRY_MS = 2000
-const CONFIG_MAX_RETRIES = 3
-
-if (!existsSync(SESSION_DIR)) mkdirSync(SESSION_DIR, { recursive: true })
 
 // ── PostgreSQL (message persistence) ───────────────────────────────────────
 
@@ -85,222 +61,6 @@ async function initDB() {
 }
 initDB()
 
-// ── Auth & Model ────────────────────────────────────────────────────────────
-
-const authStorage = AuthStorage.create()
-const modelRegistry = ModelRegistry.create(authStorage)
-
-// ── Cache de config por userId ──────────────────────────────────────────────
-
-interface AgentConfig {
-  systemPrompt: string | null
-  skillPaths: string[]
-  resourceLoader: ReturnType<typeof DefaultResourceLoader>
-  zeaToken: string
-  workspacePaths: string[]
-  engine?: string  // 'pi' | 'react' | 'opencode' | 'hermes' | 'goose'
-}
-
-const configCache = new Map<string, AgentConfig>()
-
-// ── File-based fallback ─────────────────────────────────────────────────────
-
-function loadConfigFromFile(userId: string): Partial<AgentConfig & { thalamus_user_id?: string }> | null {
-  try {
-    const configPath = join(AGENT_CONFIG_DIR, `${userId}.json`)
-    if (!existsSync(configPath)) return null
-    const raw = readFileSync(configPath, 'utf-8')
-    const parsed = JSON.parse(raw)
-    console.log(`📁 Config cargada desde archivo para ${userId}`)
-    return {
-      systemPrompt: parsed.system_prompt || null,
-      workspacePaths: parsed.workspace_paths || [],
-      thalamus_user_id: parsed.thalamus_user_id || undefined,
-      // skills are loaded from directory, not file
-      skillPaths: undefined,
-    }
-  } catch (err) {
-    console.warn(`⚠️  Error leyendo config de archivo para ${userId}:`, (err as Error).message)
-    return null
-  }
-}
-
-function loadSkillsFromDir(): string[] {
-  try {
-    if (!existsSync(SKILLS_DIR)) return []
-    return readdirSync(SKILLS_DIR, { withFileTypes: true })
-      .filter(d => d.isDirectory() && !d.name.startsWith('.'))
-      .map(d => join(SKILLS_DIR, d.name))
-  } catch {
-    return []
-  }
-}
-
-async function getAgentConfig(userId: string): Promise<AgentConfig | null> {
-  if (configCache.has(userId)) {
-    const cached = configCache.get(userId)!
-    // Refresh cache in background (don't block)
-    refreshAgentConfig(userId).catch(() => {})
-    return cached
-  }
-
-  // First load: retry on failure
-  for (let attempt = 1; attempt <= CONFIG_MAX_RETRIES; attempt++) {
-    try {
-      const config = await fetchAgentConfig(userId)
-      if (config) {
-        configCache.set(userId, config)
-        console.log(`⚙️  Config cargada para ${userId}: ${config.skillPaths.length} skills, token=${!!config.zeaToken}`)
-        return config
-      }
-    } catch (err) {
-      console.warn(`⚠️  Intento ${attempt}/${CONFIG_MAX_RETRIES} fallido para ${userId}:`, (err as Error).message)
-    }
-    if (attempt < CONFIG_MAX_RETRIES) {
-      await new Promise(r => setTimeout(r, CONFIG_RETRY_MS * attempt))
-    }
-  }
-
-  console.error(`❌ No se pudo cargar config para ${userId} después de ${CONFIG_MAX_RETRIES} intentos`)
-  return null
-}
-
-async function refreshAgentConfig(userId: string) {
-  const config = await fetchAgentConfig(userId)
-  if (config) {
-    configCache.set(userId, config)
-    console.log(`🔄 Config refrescada para ${userId}`)
-  }
-}
-
-async function fetchAgentConfig(userId: string): Promise<AgentConfig | null> {
-  // Always load local config file first (fast, always available)
-  const fileConfig = loadConfigFromFile(userId)
-  const resolvedId = fileConfig?.thalamus_user_id || userId
-
-  // Try Thalamus with resolved UUID
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
-
-    const res = await fetch(`${THALAMUS_URL}/api/internal/users/${encodeURIComponent(resolvedId)}/agent-config`, {
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-
-    if (res.ok) {
-      const { data: user } = await res.json()
-      if (user?.is_agent) {
-        const skillNames: string[] = user.agent_config?.skills || []
-        const agentHome = `/home/soma/${resolvedId.replace(/^user_/, '')}`
-        const skillPaths = resolveSkillPaths(skillNames, agentHome)
-        const systemPrompt = user.agent_config?.system_prompt || null
-        const workspacePaths = user.agent_config?.workspace_paths || []
-        const engine = user.agent_config?.engine || 'pi'
-        const zeaToken = await fetchZeaToken(resolvedId)
-        const resourceLoader = createResourceLoader(skillPaths, agentHome)
-        await resourceLoader.reload()
-
-        console.log(`☁️  Config desde Thalamus: ${skillPaths.length} skills, prompt=${!!systemPrompt}, engine=${engine}`)
-        return { systemPrompt, skillPaths, resourceLoader, zeaToken, workspacePaths, engine }
-      }
-    }
-  } catch (err) {
-    console.warn(`⚠️  Thalamus no disponible para ${userId}:`, (err as Error).message)
-  }
-
-  // Fallback: use local file config (already loaded above)
-  console.log(`📁 Usando config local para ${userId}...`)
-  const allSkills = loadSkillsFromDir()
-
-  if (allSkills.length > 0) {
-    const resourceLoader = createResourceLoader(allSkills)
-    await resourceLoader.reload()
-
-    return {
-      systemPrompt: fileConfig?.systemPrompt || buildFallbackPrompt(userId),
-      skillPaths: allSkills,
-      resourceLoader,
-      zeaToken: '',
-      workspacePaths: fileConfig?.workspacePaths || [],
-      engine: 'pi',
-    }
-  }
-
-  console.error(`❌ Sin skills disponibles para ${userId}`)
-  return null
-}
-
-function resolveSkillPaths(names: string[], agentHome?: string): string[] {
-  const baseDir = agentHome ? `${agentHome}/skills` : SKILLS_DIR
-  const paths = names
-    .map((name: string) => {
-      const dir = join(baseDir, name)
-      if (existsSync(dir)) return dir
-      const altDir = join(baseDir, name.replace(/^zea-/, ''))
-      if (existsSync(altDir)) return altDir
-      return null
-    })
-    .filter(Boolean) as string[]
-
-  // Also discover skills from custom directory (created by agent, not in Thalamus yet)
-  if (existsSync(SKILLS_CUSTOM_DIR)) {
-    for (const entry of readdirSync(SKILLS_CUSTOM_DIR, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-      const dir = join(SKILLS_CUSTOM_DIR, entry.name)
-      if (existsSync(join(dir, 'SKILL.md')) && !paths.includes(dir)) {
-        paths.push(dir)
-        console.log(`🔍 Skill filesystem descubierta: ${entry.name}`)
-      }
-    }
-  }
-
-  return paths
-}
-
-function createResourceLoader(skillPaths: string[], agentHome?: string) {
-  console.log(`[rl] creating loader with skillPaths: ${JSON.stringify(skillPaths)} agentHome: ${agentHome}`)
-  return new DefaultResourceLoader({
-    cwd: agentHome ? `${agentHome}/workspace` : process.cwd(),
-    agentDir: '/app/.pi-agent',
-    noSkills: true,
-    additionalSkillPaths: skillPaths.length > 0 ? skillPaths : [],
-  });
-}
-
-async function fetchZeaToken(userId: string): Promise<string> {
-  try {
-    const res = await fetch(`${THALAMUS_URL}/api/internal/agent-token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, scopes: ['venture:read', 'venture:write'] }),
-    })
-    if (res.ok) {
-      const { token } = await res.json()
-      if (token) process.env.ZEA_TOKEN = token
-      return token || ''
-    }
-  } catch { /* token is optional */ }
-  return ''
-}
-
-function buildFallbackPrompt(userId: string): string {
-  return [
-    `Eres un asistente de desarrollo (${userId}).`,
-    '',
-    '## Herramientas',
-    '- read: leer archivos',
-    '- bash: ejecutar comandos',
-    '- edit: modificar archivos',
-    '- write: crear nuevos archivos',
-    '',
-    '## Workspace',
-    '- Código del proyecto en /workspace/sudlich-app',
-    '- Archivos subidos por el usuario en /workspace/output/',
-    '- Output generado en /workspace/output/',
-  ].join('\n')
-}
-
 // ── Messages API — persistence layer ────────────────────────────────────────
 
 interface StoredMessage {
@@ -319,15 +79,6 @@ interface ConversationSummary {
   messageCount: number
 }
 
-function sanitizeFileName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_.:@-]/g, '_')
-}
-
-function messagesPath(conversationId: string): string {
-  const dir = join(MSG_DIR, sanitizeFileName(conversationId))
-  return join(dir, 'messages.json')
-}
-
 export async function getMessages(conversationId: string): Promise<StoredMessage[]> {
   try {
     const { rows } = await pgPool.query(
@@ -341,16 +92,13 @@ export async function getMessages(conversationId: string): Promise<StoredMessage
 
 export async function addMessage(conversationId: string, msg: Omit<StoredMessage, 'id' | 'timestamp'>): Promise<StoredMessage | null> {
   try {
-    // Strip dm: prefix for UUID column compatibility
     const cleanId = conversationId.startsWith('dm:') ? conversationId.slice(3) : conversationId
-    // Ensure conversation exists
     await pgPool.query(
       `INSERT INTO conversations (id, organization_id, user_id, agent_id, app_context, title, last_message_at, message_count)
        VALUES ($1, $2, $3, $4, $5, $6, now(), 1)
        ON CONFLICT (id) DO UPDATE SET last_message_at = now(), message_count = conversations.message_count + 1`,
       [cleanId, '00000000-0000-0000-0000-000000000000', 'system', cleanId, 'chat', msg.content?.slice(0, 80) || '']
     )
-    // Insert message
     const { rows } = await pgPool.query(
       `INSERT INTO messages (conversation_id, role, content, thinking, tools)
        VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
@@ -385,26 +133,6 @@ export async function listConversations(userId: string): Promise<ConversationSum
 
 // ── Auth helper ─────────────────────────────────────────────────────────────
 
-async function syncSkillToThalamus(agentId: string, skillName: string, action: 'add' | 'remove') {
-  try {
-    const res = await fetch(`${THALAMUS_URL}/api/internal/users/${encodeURIComponent(agentId)}/agent-config`)
-    if (!res.ok) return
-    const { data: user } = await res.json()
-    const currentSkills: string[] = user?.agent_config?.skills || []
-    const newSkills = action === 'add'
-      ? [...new Set([...currentSkills, skillName])]
-      : currentSkills.filter((s: string) => s !== skillName)
-
-    await fetch(`${THALAMUS_URL}/api/users/${encodeURIComponent(agentId)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_config: { skills: newSkills } }),
-    })
-  } catch (err) {
-    console.warn(`⚠️  Thalamus sync failed for skill ${skillName} (${action}):`, (err as Error).message)
-  }
-}
-
 function extractUserIdFromJwt(req: IncomingMessage): string | null {
   const auth = req.headers.authorization
   if (!auth?.startsWith('Bearer ')) return null
@@ -415,6 +143,61 @@ function extractUserIdFromJwt(req: IncomingMessage): string | null {
     const payload = JSON.parse(Buffer.from(payloadBase64, 'base64url').toString())
     return (payload.sub || '').replace(/^user_/, '') || null
   } catch { return null }
+}
+
+// ── Agent config fetching (desde Thalamus) ──────────────────────────────────
+
+interface AgentConfig {
+  systemPrompt: string | null
+  skills: string[]
+  engine?: string
+}
+
+async function fetchAgentSkills(agentId: string): Promise<AgentConfig> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+
+    const res = await fetch(`${THALAMUS_URL}/api/internal/users/${encodeURIComponent(agentId)}/agent-config`, {
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+
+    if (res.ok) {
+      const { data: user } = await res.json()
+      if (user?.is_agent) {
+        return {
+          systemPrompt: user.agent_config?.system_prompt || null,
+          skills: user.agent_config?.skills || [],
+          engine: user.agent_config?.engine || 'pi',
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`⚠️  Thalamus no disponible para ${agentId}:`, (err as Error).message)
+  }
+
+  // Fallback: skills del filesystem
+  return {
+    systemPrompt: null,
+    skills: listAllSkillNames(),
+    engine: 'pi',
+  }
+}
+
+function listAllSkillNames(): string[] {
+  const names: string[] = []
+  function scan(dir: string) {
+    if (!existsSync(dir)) return
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && existsSync(join(dir, entry.name, 'SKILL.md'))) {
+        if (!names.includes(entry.name)) names.push(entry.name)
+      }
+    }
+  }
+  scan(SKILLS_DIR)
+  scan(SKILLS_CUSTOM_DIR)
+  return names
 }
 
 // ── HTTP + WebSocket ────────────────────────────────────────────────────────
@@ -439,12 +222,12 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
   })
   res.end(JSON.stringify(data))
 }
 
-// ── Skills registry (module scope — shared by HTTP + watcher) ──────────────
+// ── Skills registry ────────────────────────────────────────────────────────
 
 function getSkillAgents(skillName: string): string[] {
   const regPath = join(SKILLS_CUSTOM_DIR, '.registry.json')
@@ -458,9 +241,9 @@ function getSkillAgents(skillName: string): string[] {
 }
 
 function saveSkillAgents(skillName: string, agentIds: string[]) {
-  const regPath = join(SKILLS_CUSTOM_DIR, '.registry.json')
   if (!existsSync(SKILLS_CUSTOM_DIR)) mkdirSync(SKILLS_CUSTOM_DIR, { recursive: true })
   let reg: Record<string, string[]> = {}
+  const regPath = join(SKILLS_CUSTOM_DIR, '.registry.json')
   try {
     if (existsSync(regPath)) reg = JSON.parse(readFileSync(regPath, 'utf-8'))
   } catch { /* ignore */ }
@@ -496,13 +279,14 @@ function findSkillPath(name: string): string | null {
   return null
 }
 
+// ── HTTP Server ─────────────────────────────────────────────────────────────
+
 const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     })
     res.end()
     return
@@ -517,9 +301,7 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
     try {
       const conversations = await listConversations(userId)
       sendJson(res, 200, { conversations })
-    } catch (err: any) {
-      sendJson(res, 500, { error: err.message })
-    }
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
@@ -528,13 +310,23 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   if (getMatch && req.method === 'GET') {
     const userId = extractUserIdFromJwt(req)
     if (!userId) { sendJson(res, 401, { error: 'Unauthorized' }); return }
-    const convId = decodeURIComponent(getMatch[1])
     try {
-      const messages = await getMessages(convId)
-      sendJson(res, 200, { id: convId, messages })
-    } catch (err: any) {
-      sendJson(res, 500, { error: err.message })
-    }
+      const messages = await getMessages(decodeURIComponent(getMatch[1]))
+      sendJson(res, 200, { id: decodeURIComponent(getMatch[1]), messages })
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
+    return
+  }
+
+  // DELETE /api/conversations/:id
+  if (getMatch && req.method === 'DELETE') {
+    const userId = extractUserIdFromJwt(req)
+    if (!userId) { sendJson(res, 401, { error: 'Unauthorized' }); return }
+    try {
+      const convId = decodeURIComponent(getMatch[1])
+      await pgPool.query('DELETE FROM messages WHERE conversation_id = $1', [convId])
+      await pgPool.query('DELETE FROM conversations WHERE id = $1', [convId])
+      sendJson(res, 200, { deleted: true })
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
@@ -543,63 +335,35 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   if (postMatch && req.method === 'POST') {
     const userId = extractUserIdFromJwt(req)
     if (!userId) { sendJson(res, 401, { error: 'Unauthorized' }); return }
-    const convId = decodeURIComponent(postMatch[1])
     try {
       const body = await readRequestBody(req)
-      if (!body.role || !body.content) {
-        sendJson(res, 400, { error: 'Missing role or content' })
-        return
-      }
-      const msg = await addMessage(convId, {
-        role: body.role,
-        content: body.content,
-        thinking: body.thinking,
-        tools: body.tools,
-      })
+      if (!body.role || !body.content) { sendJson(res, 400, { error: 'Missing role or content' }); return }
+      const msg = await addMessage(decodeURIComponent(postMatch[1]), { role: body.role, content: body.content, thinking: body.thinking, tools: body.tools })
       sendJson(res, 201, msg)
-    } catch (err: any) {
-      sendJson(res, 500, { error: err.message })
-    }
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
   // ── Skills API ──────────────────────────────────────────────────────────
 
-  // GET /api/skills
   if (url === '/api/skills' && req.method === 'GET') {
     try {
-      const skills = listAllSkills()
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ skills }))
-    } catch (err: any) {
-      res.writeHead(500, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: err.message }))
-    }
+      sendJson(res, 200, { skills: listAllSkills() })
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
-  // GET /api/skills/:name
   const skillGetMatch = url.match(/^\/api\/skills\/([^\/]+)$/)
   if (skillGetMatch && req.method === 'GET') {
     const name = decodeURIComponent(skillGetMatch[1])
     const mdPath = findSkillPath(name)
-    if (!mdPath) {
-      res.writeHead(404, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Skill not found' }))
-      return
-    }
+    if (!mdPath) { sendJson(res, 404, { error: 'Skill not found' }); return }
     try {
-      const content = readFileSync(mdPath, 'utf-8')
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ name, content, agents: getSkillAgents(name) }))
-    } catch (err: any) {
-      res.writeHead(500, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: err.message }))
-    }
+      sendJson(res, 200, { name, content: readFileSync(mdPath, 'utf-8'), agents: getSkillAgents(name) })
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
-  // POST /api/skills
   if (url === '/api/skills' && req.method === 'POST') {
     const body = await readRequestBody(req)
     const { name, content, agentId } = body
@@ -611,80 +375,44 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
     try {
       mkdirSync(skillDir, { recursive: true })
       writeFileSync(join(skillDir, 'SKILL.md'), content)
-      const agents = agentId ? [agentId] : []
-      saveSkillAgents(safeName, agents)
-      if (agentId) syncSkillToThalamus(agentId, safeName, 'add').catch(() => {})
+      saveSkillAgents(safeName, agentId ? [agentId] : [])
       skillsVersion++
-      sendJson(res, 201, { name: safeName, path: skillDir, assignedTo: agents })
-    } catch (err: any) {
-      sendJson(res, 500, { error: err.message })
-    }
+      sendJson(res, 201, { name: safeName, path: skillDir, assignedTo: agentId ? [agentId] : [] })
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
-  // PUT /api/skills/:name
-  const skillPutMatch = url.match(/^\/api\/skills\/([^\/]+)$/)
-  if (skillPutMatch && req.method === 'PUT') {
-    const name = decodeURIComponent(skillPutMatch[1])
+  if (skillGetMatch && req.method === 'PUT') {
+    const name = decodeURIComponent(skillGetMatch[1])
     const body = await readRequestBody(req)
     const mdPath = join(SKILLS_CUSTOM_DIR, name, 'SKILL.md')
-    if (!existsSync(mdPath)) { sendJson(res, 404, { error: 'Skill not found or not editable (built-in skills are read-only)' }); return }
+    if (!existsSync(mdPath)) { sendJson(res, 404, { error: 'Skill not found or not editable' }); return }
     try {
       writeFileSync(mdPath, body.content || '')
       sendJson(res, 200, { name, updated: true })
-    } catch (err: any) {
-      sendJson(res, 500, { error: err.message })
-    }
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
-  // DELETE /api/skills/:name
-  const skillDelMatch = url.match(/^\/api\/skills\/([^\/]+)$/)
-  if (skillDelMatch && req.method === 'DELETE') {
-    const name = decodeURIComponent(skillDelMatch[1])
+  if (skillGetMatch && req.method === 'DELETE') {
+    const name = decodeURIComponent(skillGetMatch[1])
     const skillDir = join(SKILLS_CUSTOM_DIR, name)
-    if (!existsSync(skillDir)) { sendJson(res, 404, { error: 'Skill not found or not deletable' }); return }
+    if (!existsSync(skillDir)) { sendJson(res, 404, { error: 'Skill not found' }); return }
     try {
-      const agents = getSkillAgents(name)
-      for (const aId of agents) {
-        await syncSkillToThalamus(aId, name, 'remove').catch(() => {})
-      }
       rmSync(skillDir, { recursive: true, force: true })
       saveSkillAgents(name, [])
       sendJson(res, 204, {})
-    } catch (err: any) {
-      sendJson(res, 500, { error: err.message })
-    }
+    } catch (err: any) { sendJson(res, 500, { error: err.message }) }
     return
   }
 
-  // PUT /api/skills/:name/agents
   const skillAgentsMatch = url.match(/^\/api\/skills\/([^\/]+)\/agents$/)
   if (skillAgentsMatch && req.method === 'PUT') {
     const name = decodeURIComponent(skillAgentsMatch[1])
     const body = await readRequestBody(req)
     if (!Array.isArray(body.agentIds)) { sendJson(res, 400, { error: 'agentIds must be an array' }); return }
     saveSkillAgents(name, body.agentIds)
-    for (const aId of body.agentIds) {
-      await syncSkillToThalamus(aId, name, 'add').catch(() => {})
-    }
     sendJson(res, 200, { name, assignedTo: body.agentIds })
-    return
-  }
-
-  // DELETE /api/conversations/:id
-  const delMatch = url.match(/^\/api\/conversations\/(.+)$/)
-  if (delMatch && req.method === 'DELETE') {
-    const userId = extractUserIdFromJwt(req)
-    if (!userId) { sendJson(res, 401, { error: 'Unauthorized' }); return }
-    const convId = decodeURIComponent(delMatch[1])
-    try {
-      await pgPool.query('DELETE FROM messages WHERE conversation_id = $1', [convId])
-      await pgPool.query('DELETE FROM conversations WHERE id = $1', [convId])
-      sendJson(res, 200, { deleted: true })
-    } catch (err: any) {
-      sendJson(res, 500, { error: err.message })
-    }
     return
   }
 
@@ -692,16 +420,13 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
   if (url === '/api/previews' && req.method === 'GET') {
     try {
-      // Forward to Preview Manager service
       const pmRes = await fetch('http://preview-manager:3009/api/previews')
       if (pmRes.ok) {
-        const data = await pmRes.json()
-        sendJson(res, 200, data)
+        sendJson(res, 200, await pmRes.json())
       } else {
         throw new Error('Preview Manager returned non-200')
       }
     } catch {
-      // Fallback: return empty (Preview Manager not deployed yet)
       sendJson(res, 200, { previews: [], count: 0 })
     }
     return
@@ -712,18 +437,23 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   res.end('Agent RPC OK')
 })
 
+// ── WebSocket Server ────────────────────────────────────────────────────────
+
+// Mapa: WebSocket → { bridge, agentId, conversationId }
+const sessions = new Map<WebSocket, {
+  bridge: RpcBridge
+  agentId: string
+  conversationId: string
+  assistantContent: string
+  assistantThinking: string
+  assistantTools: Array<{ name: string; input: unknown; result?: string }>
+  promptAborted: boolean
+}>()
+
 const wss = new WebSocketServer({ server: httpServer })
 
 wss.on('connection', (ws: WebSocket) => {
   console.log('📡 RPC client connected')
-
-  let userId = ''
-  let conversationId = ''
-  let session: AgentSession | null = null
-  let assistantContent = ''
-  let assistantThinking = ''
-  let promptAborted = false
-  const assistantTools: Array<{ name: string; input: unknown; result?: string }> = []
 
   ws.on('message', async (raw) => {
     let json: any
@@ -736,211 +466,207 @@ wss.on('connection', (ws: WebSocket) => {
 
     const { type, text, uid, cid } = json
 
-    // Init: load agent config → resolve engine → create session
+    // ── init: preparar sandbox → spawn pi → bridge ─────────────────────
     if (type === 'init') {
-      userId = uid || ''
-      conversationId = cid || ''
-      activeAgentId = userId
-      assistantContent = ''
-      assistantThinking = ''
-      assistantTools.length = 0
-      promptAborted = false
+      const agentId = uid || ''
+      const conversationId = cid || ''
 
-      const configChanged = skillsVersion > 0
-      if (configChanged) configCache.delete(userId)
-      const config = await getAgentConfig(userId)
-      console.log(`🔧 Init: user=${userId} conv=${conversationId} config=${!!config}`)
-
-      if (!config) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Agent config not found' }))
-        return
+      // Limpiar sesión anterior si existe
+      const prev = sessions.get(ws)
+      if (prev) {
+        prev.bridge.stop()
+        sessions.delete(ws)
       }
 
-      if (config.zeaToken) process.env.ZEA_TOKEN = config.zeaToken
+      // 1. Obtener config del agente (skills, system prompt)
+      const config = await fetchAgentSkills(agentId)
+      console.log(`🔧 Init: agent=${agentId} conv=${conversationId} skills=[${config.skills.join(',')}]`)
 
-      // Resolve engine
-      const engineName = config.engine || 'pi'
-      const engine = EngineRegistry.get(engineName)
-      if (!engine) {
-        ws.send(JSON.stringify({ type: 'error', message: `Unknown engine: ${engineName}` }))
-        console.error(`❌ Unknown engine: ${engineName}`)
-        return
-      }
-
-      console.log(`🔧 Init: user=${userId} engine=${engineName} conv=${conversationId}`)
-
-      const sessionKey = conversationId || userId || 'rpc-default'
-      const dir = join(SESSION_DIR, sessionKey)
-
-      if (configChanged && existsSync(dir)) {
-        try { rmSync(dir, { recursive: true, force: true }) } catch {}
-      }
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-
+      // 2. Preparar sandbox Linux (crear usuario, copiar skills)
+      let sandbox
       try {
-        session = await engine.createSession({
-          systemPrompt: config.systemPrompt,
-          skillPaths: config.skillPaths,
-          tools: config.tools || ['read', 'bash', 'edit', 'write'],
-          workspacePaths: config.workspacePaths,
-          sessionDir: dir,
-          modelRegistry,
-          authStorage,
-          ...(config.resourceLoader ? { resourceLoader: config.resourceLoader } : {}),
-        })
-        console.log(`✅ Sesión lista (${engineName})`)
+        sandbox = prepareAgent(agentId, config.skills)
+      } catch (err: any) {
+        ws.send(JSON.stringify({ type: 'error', message: `Sandbox creation failed: ${err.message}` }))
+        console.error(`❌ Sandbox creation failed for ${agentId}:`, err.message)
+        return
+      }
 
-        // Subscribe — unified StreamEvent format
-        session.subscribe((event) => {
-          switch (event.type) {
-            case 'thinking_start':
-              ws.send(JSON.stringify({ type: 'thinking_start' }))
-              break
-            case 'thinking':
-              assistantThinking += event.text
-              ws.send(JSON.stringify({ type: 'thinking', text: event.text }))
-              break
-            case 'thinking_end':
-              ws.send(JSON.stringify({ type: 'thinking_end' }))
-              break
-            case 'delta':
-              assistantContent += event.text
-              ws.send(JSON.stringify({ type: 'delta', text: event.text }))
-              break
-            case 'tool_use':
-              assistantTools.push({ name: event.name, input: event.input })
-              ws.send(JSON.stringify({ type: 'tool', name: event.name, input: event.input }))
-              break
-            case 'tool_result':
-              const lastTool = assistantTools[assistantTools.length - 1]
-              if (lastTool) lastTool.result = event.content
-              ws.send(JSON.stringify({ type: 'tool_result', content: event.content }))
-              break
-            case 'error':
-              ws.send(JSON.stringify({ type: 'error', message: event.message }))
-              break
-            // 'done' is handled after prompt resolves
-          }
-        })
+      // 3. Crear RPC bridge
+      const bridge = new RpcBridge({
+        uid: sandbox.uid,
+        gid: sandbox.gid,
+        home: sandbox.home,
+        systemPrompt: config.systemPrompt,
+      })
 
+      // 4. Datos de sesión
+      const sessionData = {
+        bridge,
+        agentId,
+        conversationId,
+        assistantContent: '',
+        assistantThinking: '',
+        assistantTools: [] as Array<{ name: string; input: unknown; result?: string }>,
+        promptAborted: false,
+      }
+
+      // 5. Suscribir a eventos del bridge → forward a WebSocket
+      bridge.on('ready', () => {
         ws.send(JSON.stringify({ type: 'ready' }))
-      } catch (err: any) {
-        ws.send(JSON.stringify({ type: 'error', message: `Session init failed (${engineName}): ${err.message}` }))
-      }
+        console.log(`✅ Bridge ready: ${sandboxUsername(agentId)}`)
+      })
+
+      bridge.on('thinking_start', () => {
+        ws.send(JSON.stringify({ type: 'thinking_start' }))
+      })
+
+      bridge.on('thinking', (text: string) => {
+        sessionData.assistantThinking += text
+        ws.send(JSON.stringify({ type: 'thinking', text }))
+      })
+
+      bridge.on('thinking_end', () => {
+        ws.send(JSON.stringify({ type: 'thinking_end' }))
+      })
+
+      bridge.on('delta', (text: string) => {
+        sessionData.assistantContent += text
+        ws.send(JSON.stringify({ type: 'delta', text }))
+      })
+
+      bridge.on('tool_use', (name: string, input: unknown) => {
+        sessionData.assistantTools.push({ name, input })
+        ws.send(JSON.stringify({ type: 'tool', name, input }))
+      })
+
+      bridge.on('tool_result', (content: string) => {
+        const lastTool = sessionData.assistantTools[sessionData.assistantTools.length - 1]
+        if (lastTool) lastTool.result = content
+        ws.send(JSON.stringify({ type: 'tool_result', content }))
+      })
+
+      bridge.on('done', () => {
+        ws.send(JSON.stringify({ type: 'done' }))
+
+        // Persistir mensaje del asistente
+        const content = sessionData.assistantContent.trim()
+        if (content || sessionData.assistantTools.length > 0) {
+          addMessage(conversationId, {
+            role: 'assistant',
+            content: content || '(sin respuesta)',
+            thinking: sessionData.assistantThinking.trim() || undefined,
+            tools: sessionData.assistantTools.length > 0 ? sessionData.assistantTools : undefined,
+          }).catch((err: any) => console.warn('⚠️  Failed to persist assistant message:', err.message))
+        }
+
+        // Reset para próximo prompt
+        sessionData.assistantContent = ''
+        sessionData.assistantThinking = ''
+        sessionData.assistantTools = []
+        sessionData.promptAborted = false
+      })
+
+      bridge.on('error', (message: string) => {
+        ws.send(JSON.stringify({ type: 'error', message }))
+      })
+
+      bridge.on('disconnected', (code: number | null) => {
+        if (!sessionData.promptAborted && code !== 0 && code !== null) {
+          ws.send(JSON.stringify({ type: 'error', message: `Agent process exited with code ${code}` }))
+        }
+      })
+
+      // 6. Arrancar el subproceso
+      bridge.start()
+      sessions.set(ws, sessionData)
+
       return
     }
 
-    // Cancel
-    if (type === 'cancel' && session) {
-      console.log(`⏹️  Cancel requested for conv ${conversationId.slice(0, 8)}`)
-      promptAborted = true
-      try {
-        await session.abort()
+    // ── cancel ──────────────────────────────────────────────────────────
+    if (type === 'cancel') {
+      const session = sessions.get(ws)
+      if (session) {
+        console.log(`⏹️  Cancel requested for ${session.agentId.slice(0, 12)}`)
+        session.promptAborted = true
+        session.bridge.abort()
+        // Reset accumulators
+        session.assistantContent = ''
+        session.assistantThinking = ''
+        session.assistantTools = []
         ws.send(JSON.stringify({ type: 'cancelled' }))
-        // Reset accumulators since the response was aborted
-        assistantContent = ''
-        assistantThinking = ''
-        assistantTools.length = 0
-      } catch (err: any) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Cancel failed: ' + err.message }))
       }
       return
     }
 
-    // Prompt
-    if (type === 'prompt' && session) {
+    // ── prompt ─────────────────────────────────────────────────────────
+    if (type === 'prompt') {
       if (!text?.trim()) return
-      console.log(`💬 Prompt [${conversationId.slice(0, 8)}]: "${text.slice(0, 60)}..."`)
 
-      // Persist user message
+      const session = sessions.get(ws)
+      if (!session) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Not initialized. Send init first.' }))
+        return
+      }
+
+      console.log(`💬 Prompt [${session.agentId.slice(0, 12)}]: "${text.slice(0, 60)}..."`)
+
+      // Persistir mensaje del usuario
       try {
-        addMessage(conversationId, { role: 'user', content: text })
+        await addMessage(session.conversationId, { role: 'user', content: text })
       } catch (err: any) {
         console.warn(`⚠️  Failed to persist user message: ${err.message}`)
       }
 
-      try {
-        await session.prompt(text)
-        if (promptAborted) return // session was aborted via cancel; don't send done/persist
-        ws.send(JSON.stringify({ type: 'done' }))
-
-        // Persist assistant response
-        try {
-          const content = assistantContent.trim()
-          if (content || assistantTools.length > 0) {
-            addMessage(conversationId, {
-              role: 'assistant',
-              content: content || '(sin respuesta)',
-              thinking: assistantThinking.trim() || undefined,
-              tools: assistantTools.length > 0 ? assistantTools : undefined,
-            })
-          }
-        } catch (err: any) {
-          console.warn(`⚠️  Failed to persist assistant message: ${err.message}`)
-        }
-
-        // Reset accumulators for next prompt
-        assistantContent = ''
-        assistantThinking = ''
-        assistantTools.length = 0
-      } catch (err: any) {
-        ws.send(JSON.stringify({ type: 'error', message: String(err) }))
-      }
+      session.bridge.sendPrompt(text)
       return
     }
 
-    ws.send(JSON.stringify({ type: 'error', message: 'Unknown command or not initialized' }))
+    ws.send(JSON.stringify({ type: 'error', message: 'Unknown command' }))
   })
 
   ws.on('close', () => {
     console.log('📡 RPC client disconnected')
-    session = null
+
+    // Limpiar bridge al desconectar
+    const session = sessions.get(ws)
+    if (session) {
+      session.bridge.stop()
+      sessions.delete(ws)
+    }
   })
 })
 
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Agent RPC WebSocket on ws://0.0.0.0:${PORT}`)
+  console.log(`🚀 Agent RPC WebSocket + HTTP on ws://0.0.0.0:${PORT}`)
+  console.log(`   Modo: subprocesos pi --mode rpc aislados por usuario Linux`)
 })
 
 // ── Skills auto-discovery watcher ──────────────────────────────────────────
 
-if (!existsSync(SKILLS_CUSTOM_DIR)) {
-  mkdirSync(SKILLS_CUSTOM_DIR, { recursive: true })
-}
-
-// Track which skills were already known to avoid re-registering
-const knownSkills = new Set<string>()
-// Track the most recent agent connected (for auto-registration)
 let activeAgentId = ''
-// Initialize from existing custom skills
+if (!existsSync(SKILLS_CUSTOM_DIR)) mkdirSync(SKILLS_CUSTOM_DIR, { recursive: true })
+
+// Track known skills
+const knownSkills = new Set<string>()
 if (existsSync(SKILLS_CUSTOM_DIR)) {
   for (const entry of readdirSync(SKILLS_CUSTOM_DIR, { withFileTypes: true })) {
-    if (entry.isDirectory() && !entry.name.startsWith('.')) {
-      knownSkills.add(entry.name)
-    }
+    if (entry.isDirectory() && !entry.name.startsWith('.')) knownSkills.add(entry.name)
   }
 }
 
-// Watch custom skills directory for new SKILL.md files
 try {
   watch(SKILLS_CUSTOM_DIR, { recursive: false }, (_eventType, filename) => {
     if (!filename || filename === '.registry.json') return
-    // Check if it's a new directory with SKILL.md
     const skillDir = join(SKILLS_CUSTOM_DIR, filename)
     const mdPath = join(skillDir, 'SKILL.md')
     if (existsSync(mdPath) && !knownSkills.has(filename)) {
       knownSkills.add(filename)
       console.log(`🆕 Nueva skill detectada: ${filename}`)
-      // Auto-register for the active agent
-      if (activeAgentId && filename) {
-        const skillContent = readFileSync(mdPath, 'utf-8')
+      if (activeAgentId) {
         saveSkillAgents(filename, [activeAgentId])
-        syncSkillToThalamus(activeAgentId, filename, 'add').then(() => {
-          console.log(`✅ Skill ${filename} auto-registrada para agente ${activeAgentId}`)
-          skillsVersion++
-        }).catch((err) => {
-          console.warn(`⚠️  Auto-registro fallido para ${filename}:`, err.message)
-        })
+        skillsVersion++
       }
     }
   })
