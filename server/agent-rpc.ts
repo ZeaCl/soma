@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync
 import { join } from 'path'
 
 // ── Sandbox + RPC Bridge ──────────────────────────────────────────────────
-import { prepareAgent, destroyAgent, sandboxExists, sandboxUsername } from './agent-sandbox'
+import { prepareAgent, destroyAgent, sandboxExists, sandboxUsername, agentHome } from './agent-sandbox'
 import { RpcBridge } from './rpc-bridge'
 
 const PORT = parseInt(process.env.AGENT_RPC_PORT || '3002', 10)
@@ -145,7 +145,13 @@ function extractUserIdFromJwt(req: IncomingMessage): string | null {
   } catch { return null }
 }
 
-// ── Agent config fetching (desde Thalamus) ──────────────────────────────────
+// ── Agent config (local-first, no depende de Thalamus en runtime) ────────
+//
+// Arquitectura correcta:
+//   Thalamus → POST /api/agents → Soma guarda config en sandbox
+//   Runtime: Soma lee config del filesystem del agente, NO de Thalamus
+//
+// Esto elimina la dependencia circular y el bug del endpoint 400.
 
 interface AgentConfig {
   systemPrompt: string | null
@@ -153,50 +159,47 @@ interface AgentConfig {
   engine?: string
 }
 
-async function fetchAgentSkills(agentId: string): Promise<AgentConfig> {
+/**
+ * Obtiene la config del agente desde su sandbox local.
+ * No depende de Thalamus en runtime — las skills ya fueron copiadas
+ * por agent-sandbox.ts durante prepareAgent().
+ *
+ * Si Thalamus quiere actualizar la config de un agente, debe llamar
+ * a POST /api/agents (endpoint receiver abajo).
+ */
+function fetchAgentSkills(agentId: string): AgentConfig {
+  const home = agentHome(agentId)
+
+  // 1. Leer system_prompt de config local
+  let systemPrompt: string | null = null
+  const configPath = join(home, '.pi', 'agent', 'config.json')
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
-
-    const res = await fetch(`${THALAMUS_URL}/api/internal/users/${encodeURIComponent(agentId)}/agent-config`, {
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-
-    if (res.ok) {
-      const { data: user } = await res.json()
-      if (user?.is_agent) {
-        return {
-          systemPrompt: user.agent_config?.system_prompt || null,
-          skills: user.agent_config?.skills || [],
-          engine: user.agent_config?.engine || 'pi',
-        }
-      }
+    if (existsSync(configPath)) {
+      const cfg = JSON.parse(readFileSync(configPath, 'utf-8'))
+      systemPrompt = cfg.system_prompt || null
     }
-  } catch (err) {
-    console.warn(`⚠️  Thalamus no disponible para ${agentId}:`, (err as Error).message)
+  } catch { /* ignore */ }
+
+  // 2. Listar skills del home del agente
+  const skills = listAgentSkills(home)
+
+  if (skills.length > 0) {
+    console.log(`🔧 Agent ${agentId.slice(0, 12)}: ${skills.length} skills locales, system_prompt=${systemPrompt ? 'sí' : 'no'}`)
   }
 
-  // Fallback: skills del filesystem
-  return {
-    systemPrompt: null,
-    skills: listAllSkillNames(),
-    engine: 'pi',
-  }
+  return { systemPrompt, skills, engine: 'pi' }
 }
 
-function listAllSkillNames(): string[] {
+/** Lista skills instaladas en el home del agente */
+function listAgentSkills(home: string): string[] {
   const names: string[] = []
-  function scan(dir: string) {
-    if (!existsSync(dir)) return
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory() && !entry.name.startsWith('.') && existsSync(join(dir, entry.name, 'SKILL.md'))) {
-        if (!names.includes(entry.name)) names.push(entry.name)
-      }
+  const skillsDir = join(home, '.agents', 'skills')
+  if (!existsSync(skillsDir)) return names
+  for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && !entry.name.startsWith('.') && existsSync(join(skillsDir, entry.name, 'SKILL.md'))) {
+      names.push(entry.name)
     }
   }
-  scan(SKILLS_DIR)
-  scan(SKILLS_CUSTOM_DIR)
   return names
 }
 
@@ -416,6 +419,43 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
     return
   }
 
+  // ── Agent Config Receiver (Thalamus → Soma push) ────────────────────
+  // Thalamus llama a este endpoint cuando crea/actualiza un agente.
+  // Soma guarda la config en el filesystem del agente. Runtime no depende de Thalamus.
+  if (url === '/api/agents' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req)
+      const { agent_id, system_prompt, skills, engine } = body
+      if (!agent_id) { sendJson(res, 400, { error: 'agent_id required' }); return }
+
+      // Guardar config en el home del agente
+      const home = agentHome(agent_id)
+      const cfgDir = join(home, '.pi', 'agent')
+      if (!existsSync(cfgDir)) mkdirSync(cfgDir, { recursive: true })
+
+      const config = {
+        agent_id,
+        system_prompt: system_prompt || null,
+        skills: skills || [],
+        engine: engine || 'pi',
+        updated_at: new Date().toISOString(),
+      }
+      writeFileSync(join(cfgDir, 'config.json'), JSON.stringify(config, null, 2))
+
+      // Si el sandbox no existe, crearlo
+      if (!sandboxExists(agent_id)) {
+        prepareAgent(agent_id, skills || [])
+      }
+
+      console.log(`📥 Agent config pushed: ${agent_id.slice(0, 12)} skills=[${(skills || []).join(',')}]`)
+      sendJson(res, 200, { ok: true, agent_id })
+    } catch (err: any) {
+      console.error('❌ POST /api/agents failed:', err.message)
+      sendJson(res, 500, { error: err.message })
+    }
+    return
+  }
+
   // ── Previews API ──────────────────────────────────────────────────────
 
   if (url === '/api/previews' && req.method === 'GET') {
@@ -479,7 +519,7 @@ wss.on('connection', (ws: WebSocket) => {
       }
 
       // 1. Obtener config del agente (skills, system prompt)
-      const config = await fetchAgentSkills(agentId)
+      const config = fetchAgentSkills(agentId)
       console.log(`🔧 Init: agent=${agentId} conv=${conversationId} skills=[${config.skills.join(',')}]`)
 
       // 2. Preparar sandbox Linux (crear usuario, copiar skills)

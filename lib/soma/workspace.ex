@@ -31,22 +31,46 @@ defmodule Soma.Workspace do
     System.cmd("git", ["config", "user.name", "Soma Workspace"], cd: dir)
   end
 
-  # ── List ─────────────────────────────────────
+  # ── List (unified: user | agent | org) ──────
 
-  def list_files_per_agent(org_id, agent_id, sub_path \\ "") do
-    if agent_id && agent_id != "" do
-      # Agent sandbox: /home/soma/<agent_id>/workspace
-      base = "/home/soma/#{agent_id}/workspace"
-      dir = if sub_path == "", do: base, else: Path.join(base, sub_path)
-      if File.dir?(dir) do
-        {:ok, scan_dir(dir, dir, "")}
-      else
-        {:ok, []}
-      end
+  @doc """
+  Lista archivos según owner_type:
+  - "user" → /home/user-{shortId}/workspace
+  - "agent" → /home/soma-{shortId}/workspace
+  - "org" → /workspace/orgs/{org_id}/shared
+  """
+  def list_files(owner_type, owner_id, org_id, sub_path \\ "") do
+    base = workspace_base(owner_type, owner_id, org_id)
+    dir = if sub_path == "", do: base, else: Path.join(base, sub_path)
+    if File.dir?(dir) do
+      {:ok, scan_dir(dir, dir, "")}
     else
-      # Fallback: no agent specified
       {:ok, []}
     end
+  end
+
+  defp workspace_base("agent", agent_id, _org_id) do
+    username = "soma-#{String.slice(agent_id, 0, 12)}"
+    "/home/#{username}/workspace"
+  end
+
+  defp workspace_base("user", user_id, _org_id) do
+    username = "user-#{String.slice(user_id, 0, 12)}"
+    "/home/#{username}/workspace"
+  end
+
+  defp workspace_base("org", _owner_id, org_id) do
+    Path.join([@workspace_root, org_id, "shared"])
+  end
+
+  defp workspace_base(_, _, org_id) do
+    org_path(org_id)
+  end
+
+  # ── Legacy (backward compat) ─────────────────
+
+  def list_files_per_agent(org_id, agent_id, sub_path \\ "") do
+    list_files("agent", agent_id, org_id, sub_path)
   end
 
   defp scan_dir(root, dir, relative) do

@@ -18,7 +18,7 @@ import { join } from 'path'
 
 // ── Config ────────────────────────────────────────────────────────────────
 
-const SANDBOX_HOME = '/home/soma'
+const SANDBOX_HOME = '/home'
 const SKILLS_SOURCE_DIR = '/root/.agents/skills'
 const SKILLS_CUSTOM_SOURCE = '/app/.pi-agent-skills'
 const USERADD_SCRIPT = '/usr/local/bin/soma-agent-useradd'
@@ -57,7 +57,10 @@ export function prepareAgent(agentId: string, skillNames: string[]): SandboxAgen
   // 4. Copiar auth y settings del host
   copyAgentAuth(home)
 
-  // 5. Crear directorios de trabajo
+  // 5. Crear config local (system_prompt, engine) — no depende de Thalamus
+  ensureAgentConfig(home, skillNames)
+
+  // 6. Crear directorios de trabajo
   ensureDir(join(home, 'workspace'), uid, gid)
   ensureDir(join(home, '.pi-sessions'), uid, gid)
 
@@ -96,9 +99,10 @@ export function sandboxUsername(agentId: string): string {
 
 /**
  * Home directory para un agentId.
+ * El home real es /home/soma-{shortId} (creado por useradd).
  */
 export function agentHome(agentId: string): string {
-  return join(SANDBOX_HOME, agentId)
+  return join(SANDBOX_HOME, sandboxUsername(agentId))
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -230,4 +234,29 @@ function copyAgentAuth(home: string): void {
       }
     }
   }
+}
+
+/**
+ * Crea config.json local del agente.
+ * Runtime lee de acá, NO de Thalamus.
+ * Thalamus puede sobreescribir vía POST /api/agents.
+ */
+function ensureAgentConfig(home: string, skillNames: string[]): void {
+  const cfgDir = join(home, '.pi', 'agent')
+  const cfgPath = join(cfgDir, 'config.json')
+
+  if (existsSync(cfgPath)) {
+    // Ya existe — Thalamus pudo haberla escrito. No sobreescribir.
+    return
+  }
+
+  mkdirSync(cfgDir, { recursive: true })
+  const config = {
+    skills: skillNames,
+    system_prompt: null,  // Thalamus lo setea cuando crea el agente
+    engine: 'pi',
+    created_at: new Date().toISOString(),
+  }
+  writeFileSync(cfgPath, JSON.stringify(config, null, 2))
+  console.log(`   📋 config.json creado: ${skillNames.length} skills`)
 }

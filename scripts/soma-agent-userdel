@@ -13,7 +13,7 @@ if [ -z "$AGENT_ID" ]; then
 fi
 
 USERNAME="soma-${AGENT_ID:0:12}"
-HOMEDIR="/home/soma/${AGENT_ID}"
+HOMEDIR="/home/${USERNAME}"
 
 echo "🗑️  Destroying agent user: $USERNAME"
 

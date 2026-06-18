@@ -2,7 +2,6 @@ defmodule SomaWeb.Plugs.ApiKeyAuth do
   @moduledoc "Validates API Key (zs_live_...) for programmatic access."
 
   import Plug.Conn
-  import Ecto.Query
   alias Soma.{Repo, ApiKey}
 
   def init(opts), do: opts
@@ -24,7 +23,8 @@ defmodule SomaWeb.Plugs.ApiKeyAuth do
             conn |> send_resp(401, Jason.encode!(%{error: "unauthorized", detail: "invalid_api_key"})) |> halt()
         end
       _ ->
-        conn |> send_resp(401, Jason.encode!(%{error: "unauthorized", detail: "missing_authentication"})) |> halt()
+        # No API key provided — let Guard or JWTAuth handle auth
+        conn
     end
   end
 end

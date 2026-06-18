@@ -16,7 +16,7 @@ if [ -z "$AGENT_ID" ] || [ -z "$ORG_ID" ]; then
 fi
 
 USERNAME="soma-${AGENT_ID:0:12}"
-HOMEDIR="/home/soma/${AGENT_ID}"
+HOMEDIR="/home/${USERNAME}"
 SHELL="/bin/bash"
 BOOTSTRAP="/home/soma/_bootstrap"
 
@@ -47,7 +47,7 @@ else
   if [ "$IS_ALPINE" = true ]; then
     adduser -D -s "$SHELL" -h "$HOMEDIR" -G "$USERNAME" "$USERNAME"
   else
-    useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --no-create-home "$USERNAME"
+    useradd --home-dir "$HOMEDIR" --shell "$SHELL" --gid "$USERNAME" --create-home "$USERNAME"
   fi
   echo "   ✅ User created: uid=$(id -u "$USERNAME")"
 fi
@@ -71,10 +71,11 @@ fi
 
 echo "   ✅ Groups: $(groups "$USERNAME" | cut -d: -f2)"
 
-# ── 4. Crear home directory ───────────────────────────────────────────
+# ── 4. Crear subdirectorios de trabajo ──────────────────────────────
 mkdir -p "$HOMEDIR/workspace"
 mkdir -p "$HOMEDIR/.config"
 mkdir -p "$HOMEDIR/.pi-sessions"
+mkdir -p "$HOMEDIR/.agents/skills"
 [ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.bashrc" "$HOMEDIR/" 2>/dev/null || true
 [ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.gitconfig" "$HOMEDIR/" 2>/dev/null || true
 

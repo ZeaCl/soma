@@ -1,31 +1,33 @@
-defmodule Soma.Sandbox do
+defmodule Soma.UserSandbox do
   @moduledoc """
-  OS-level sandbox management — wraps soma-agent-useradd/userdel scripts.
+  OS-level sandbox management para usuarios humanos.
 
-  Each agent gets a real Linux user with:
-  - Isolated home directory (chmod 700)
-  - Group membership (org + teams)
-  - Bind mounts for shared volumes
-  - Kernel-enforced access control
+  Cada usuario humano recibe un usuario Linux real con:
+  - Home aislado (chmod 700): /home/user-{shortId}/
+  - Workspace personal: ~/workspace/
+  - Grupo de organización: org-{orgId}
+  - Acceso a directorios compartidos de la org
+
+  A diferencia de Soma.Sandbox (agentes):
+  - Username: user-{shortId} (no soma-{shortId})
+  - Sin skills (no ejecutan pi)
   """
 
   @scripts_dir Application.compile_env(:soma, :scripts_dir, "/usr/local/bin")
 
   @doc """
-  Creates a Linux user for an agent.
+  Crea un usuario Linux para un humano.
 
   Returns `{:ok, uid, home}` on success, `{:error, reason}` on failure.
   """
-  def create(agent_id, org_id, opts \\ []) do
-    script = Path.join(@scripts_dir, "soma-agent-useradd")
+  def create(user_id, org_id, opts \\ []) do
+    script = Path.join(@scripts_dir, "soma-user-useradd")
     teams = Keyword.get(opts, :teams, "") || ""
-    mounts = Keyword.get(opts, :mounts, [])
-    mounts_json = Jason.encode!(mounts)
-    args = [agent_id, org_id, teams, mounts_json]
+    args = [user_id, org_id, teams]
 
     case System.cmd(script, args, stderr_to_stdout: true) do
       {_output, 0} ->
-        username = "soma-#{String.slice(agent_id, 0, 12)}"
+        username = "user-#{String.slice(user_id, 0, 12)}"
         home = "/home/#{username}"
         uid = extract_uid_from_username(username)
         {:ok, uid, home}
@@ -35,30 +37,27 @@ defmodule Soma.Sandbox do
   end
 
   @doc """
-  Destroys the Linux user for an agent.
-
-  Returns `{:ok, agent_id}` on success, `{:error, reason}` on failure.
+  Destruye el usuario Linux.
   """
-  def destroy(agent_id) do
-    script = Path.join(@scripts_dir, "soma-agent-userdel")
-    args = [agent_id]
+  def destroy(user_id) do
+    script = Path.join(@scripts_dir, "soma-user-userdel")
+    args = [user_id]
 
     case System.cmd(script, args, stderr_to_stdout: true) do
-      {_output, 0} -> {:ok, agent_id}
+      {_output, 0} -> {:ok, user_id}
       {output, code} -> {:error, "userdel failed (exit #{code}): #{String.slice(output, 0, 200)}"}
     end
   end
 
   @doc """
-  Returns the Linux username for a given agent ID.
+  Username Linux para un userId.
   """
-  def username(agent_id), do: "soma-#{String.slice(agent_id, 0, 12)}"
+  def username(user_id), do: "user-#{String.slice(user_id, 0, 12)}"
 
   @doc """
-  Returns the home directory path for a given agent ID.
-  Home = /home/soma-{first12chars} (creado por useradd).
+  Home directory para un userId.
   """
-  def home_dir(agent_id), do: "/home/soma-#{String.slice(agent_id, 0, 12)}"
+  def home_dir(user_id), do: "/home/user-#{String.slice(user_id, 0, 12)}"
 
   # ── Private ──────────────────────────────────────────────────────────
 

@@ -39,5 +39,11 @@
     "typescript": "^5.0.0"
   },
   "license": "Apache-2.0",
-  "repository": "github.com/zeacl/soma"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeaCl/soma.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
 }

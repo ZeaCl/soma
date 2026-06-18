@@ -13,6 +13,11 @@ export { GliaSkillEditor } from './components/GliaSkillEditor'
 export { AgentSkillPanel } from './components/AgentSkillPanel'
 export { SomaPanel } from './components/SomaPanel'
 export { SkillManager } from './components/SkillManager'
+export { UserWorkspace } from './components/UserWorkspace'
+export type { UserWorkspaceProps, UserWorkspaceColors, WorkspaceFile } from './components/UserWorkspace'
+export { useUserWorkspace } from './components/UserWorkspace'
+export { UserFileDropZone } from './components/UserFileDropZone'
+export type { UserFileDropZoneProps } from './components/UserFileDropZone'
 
 // Sandbox providers
 export { createRestSandboxProvider } from './sandbox/rest-provider'

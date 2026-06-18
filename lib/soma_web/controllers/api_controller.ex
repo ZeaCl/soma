@@ -1,6 +1,6 @@
 defmodule SomaWeb.ApiController do
   use Plug.Router
-  alias Soma.{Repo, ApiKey, Conversations, Workspace, Skills}
+  alias Soma.{Repo, ApiKey, Conversations, Workspace, Skills, UserSandbox, OrgWorkspace}
 
   plug :match
   plug :dispatch
@@ -238,6 +238,92 @@ defmodule SomaWeb.ApiController do
     end
   end
 
+  # ── Sandboxes ─────────────────────────────────
+
+  get "/sandboxes" do
+    org_id = conn.assigns[:org_id]
+    owner_type = conn.params["owner_type"] || "agent"
+    owner_id = conn.params["owner_id"]
+
+    if owner_id == nil || owner_id == "" do
+      send_resp(conn, 400, Jason.encode!(%{error: "owner_id required"}))
+    else
+      case Workspace.list_files(owner_type, owner_id, org_id, conn.params["path"] || "") do
+        {:ok, files} ->
+          result = format_file_list(files)
+          send_resp(conn, 200, Jason.encode!(%{files: result, owner_type: owner_type, owner_id: owner_id}))
+      end
+    end
+  end
+
+  # Sandbox creation (GET with query params — body_params unreliable through forward)
+  get "/sandboxes/create" do
+    do_create_sandbox(conn, conn.params)
+  end
+
+  # ── Private helpers ──────────────────────────
+
+  delete "/sandboxes/:id" do
+    type = conn.params["type"] || "user"
+    case type do
+      "user" ->
+        case UserSandbox.destroy(id) do
+          {:ok, _} -> send_resp(conn, 200, Jason.encode!(%{ok: true}))
+          {:error, reason} -> send_resp(conn, 500, Jason.encode!(%{error: reason}))
+        end
+      "agent" ->
+        case Soma.Sandbox.destroy(id) do
+          {:ok, _} -> send_resp(conn, 200, Jason.encode!(%{ok: true}))
+          {:error, reason} -> send_resp(conn, 500, Jason.encode!(%{error: reason}))
+        end
+      _ -> send_resp(conn, 400, Jason.encode!(%{error: "type must be 'user' or 'agent'"}))
+    end
+  end
+
+  # ── Unified File Operations ───────────────────
+
+  get "/files/unified" do
+    org_id = conn.assigns[:org_id]
+    owner_type = conn.params["owner_type"] || "agent"
+    owner_id = conn.params["owner_id"]
+    path = conn.params["path"] || ""
+
+    case Workspace.list_files(owner_type, owner_id, org_id, path) do
+      {:ok, files} ->
+        result = format_file_list(files)
+        send_resp(conn, 200, Jason.encode!(%{files: result, owner_type: owner_type}))
+    end
+  end
+
+  post "/files/unified/upload" do
+    org_id = conn.assigns[:org_id]
+    attrs = conn.body_params
+    owner_type = attrs["owner_type"] || "user"
+    owner_id = attrs["owner_id"]
+    name = attrs["name"] || "file"
+    data = attrs["data"] || ""
+    subpath = attrs["path"] || ""
+    filepath = if subpath == "", do: name, else: Path.join(subpath, name)
+    content = Base.decode64!(data)
+
+    base = case owner_type do
+      "user" -> UserSandbox.home_dir(owner_id)
+      "agent" -> Soma.Sandbox.home_dir(owner_id)
+      "org" -> OrgWorkspace.shared_dir(org_id)
+      _ -> UserSandbox.home_dir(owner_id)
+    end
+
+    full_path = Path.join([base, "workspace", filepath])
+    dir = Path.dirname(full_path)
+    File.mkdir_p!(dir)
+    File.write!(full_path, content)
+
+    conn |> json(200, %{
+      ok: true, path: filepath, size: byte_size(content),
+      owner_type: owner_type, owner_id: owner_id
+    })
+  end
+
   # ── Agent Config ───────────────────────────────
 
   get "/agents" do
@@ -360,5 +446,46 @@ defmodule SomaWeb.ApiController do
       ["Bearer " <> token] -> token
       _ -> nil
     end
+  end
+
+  defp do_create_sandbox(conn, attrs) do
+    require Logger
+    org_id = conn.assigns[:org_id]
+    type = attrs["type"] || "user"
+    owner_id = attrs["user_id"] || attrs["owner_id"]
+    Logger.info("do_create_sandbox: org=#{inspect(org_id)} type=#{type} owner=#{owner_id}")
+    if owner_id == nil || owner_id == "" do
+      conn |> json(400, %{error: "user_id required"})
+    else
+      case type do
+        "user" ->
+          case UserSandbox.create(owner_id, org_id, teams: attrs["teams"]) do
+            {:ok, uid, home} ->
+              OrgWorkspace.ensure_shared(org_id)
+              conn |> json(201, %{ok: true, username: UserSandbox.username(owner_id), uid: uid, home: home})
+            {:error, reason} -> conn |> json(500, %{error: reason})
+          end
+        "agent" ->
+          case Soma.Sandbox.create(owner_id, org_id, teams: attrs["teams"]) do
+            {:ok, uid, home} ->
+              OrgWorkspace.ensure_shared(org_id)
+              conn |> json(201, %{ok: true, username: Soma.Sandbox.username(owner_id), uid: uid, home: home})
+            {:error, reason} -> conn |> json(500, %{error: reason})
+          end
+        _ -> conn |> json(400, %{error: "type must be user or agent"})
+      end
+    end
+  end
+
+  defp json(conn, status, body) do
+    conn |> put_resp_content_type("application/json") |> send_resp(status, Jason.encode!(body))
+  end
+
+  defp format_file_list(files) do
+    Enum.map(files, fn
+      {name, "dir", size} -> %{name: name, type: "dir", size: size}
+      {name, "file", size, ext} -> %{name: name, type: "file", size: size, ext: ext}
+      other -> %{name: elem(other, 0), type: "unknown"}
+    end)
   end
 end

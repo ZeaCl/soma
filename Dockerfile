@@ -37,13 +37,16 @@ COPY server/agent-sandbox.ts /app/server/agent-sandbox.ts
 COPY server/rpc-bridge.ts /app/server/rpc-bridge.ts
 WORKDIR /app
 
-# ── Scripts de sandbox (useradd/userdel) ────────────────────────────
+# ── Scripts de sandbox (useradd/userdel para agentes y usuarios) ──
 COPY scripts/soma-agent-useradd /usr/local/bin/soma-agent-useradd
 COPY scripts/soma-agent-userdel /usr/local/bin/soma-agent-userdel
-RUN chmod +x /usr/local/bin/soma-agent-useradd /usr/local/bin/soma-agent-userdel
+COPY scripts/soma-user-useradd /usr/local/bin/soma-user-useradd
+COPY scripts/soma-user-userdel /usr/local/bin/soma-user-userdel
+RUN chmod +x /usr/local/bin/soma-agent-useradd /usr/local/bin/soma-agent-userdel \
+ && chmod +x /usr/local/bin/soma-user-useradd /usr/local/bin/soma-user-userdel
 
-# ── Directorios base para el sandbox multi-agente ───────────────────
-RUN mkdir -p /home/soma /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages /app/.pi-agent-sessions
+# ── Directorios base para el sandbox ────────────────────────────────
+RUN mkdir -p /home /workspace/orgs /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages /app/.pi-agent-sessions
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh

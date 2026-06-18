@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import React8, { useRef, useState, useCallback, useEffect } from 'react';
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime';
 
 // src/hooks/useGlia.ts
@@ -1273,6 +1273,414 @@ var inputStyle = {
   outline: "none",
   boxSizing: "border-box"
 };
+var defaultColors2 = {
+  bg: "#0d1117",
+  surface: "#161b22",
+  border: "#21262d",
+  text: "#e6edf3",
+  textSecondary: "#8b949e",
+  primary: "#58a6ff",
+  error: "#f85149",
+  success: "#3fb950",
+  radius: "6px"
+};
+function formatSize2(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+function fileIcon2(f) {
+  if (f.type === "dir") return "\u{1F4C1}";
+  const ext = (f.ext || "").toLowerCase();
+  if ([".md", ".markdown"].includes(ext)) return "\u{1F4DD}";
+  if ([".json"].includes(ext)) return "\u{1F4CB}";
+  if ([".py"].includes(ext)) return "\u{1F40D}";
+  if ([".js", ".ts", ".tsx", ".jsx"].includes(ext)) return "\u26A1";
+  if ([".xlsx", ".xls"].includes(ext)) return "\u{1F4CA}";
+  if ([".csv"].includes(ext)) return "\u{1F4C8}";
+  if ([".pdf"].includes(ext)) return "\u{1F4D5}";
+  if ([".png", ".jpg", ".jpeg", ".gif", ".svg"].includes(ext)) return "\u{1F5BC}\uFE0F";
+  if ([".txt", ".log"].includes(ext)) return "\u{1F4C4}";
+  return "\u{1F4C4}";
+}
+function useUserWorkspace(options) {
+  const { ownerType, ownerId, orgId, baseUrl, authHeaders } = options;
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [currentPath, setCurrentPath] = useState("");
+  const apiBase = baseUrl || "";
+  const getHeaders = useCallback(() => {
+    if (authHeaders) return authHeaders();
+    return {};
+  }, [authHeaders]);
+  const fetchFiles = useCallback(async (path) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        owner_type: ownerType,
+        owner_id: ownerId
+      });
+      if (path) params.set("path", path);
+      if (orgId) params.set("org_id", orgId);
+      const res = await fetch(`${apiBase}/api/files/unified?${params}`, {
+        headers: getHeaders()
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setFiles(data.files || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, ownerType, ownerId, orgId, getHeaders]);
+  const navigateTo = useCallback((dirName) => {
+    const newPath = currentPath ? `${currentPath}/${dirName}` : dirName;
+    setCurrentPath(newPath);
+    fetchFiles(newPath);
+  }, [currentPath, fetchFiles]);
+  const navigateUp = useCallback(() => {
+    const parts = currentPath.split("/");
+    parts.pop();
+    const newPath = parts.join("/");
+    setCurrentPath(newPath);
+    fetchFiles(newPath);
+  }, [currentPath, fetchFiles]);
+  const upload = useCallback(async (name, data, path) => {
+    try {
+      const res = await fetch(`${apiBase}/api/files/unified/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getHeaders() },
+        body: JSON.stringify({
+          owner_type: ownerType,
+          owner_id: ownerId,
+          name,
+          data: btoa(data),
+          path: path || currentPath
+        })
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchFiles(currentPath);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [apiBase, ownerType, ownerId, currentPath, fetchFiles, getHeaders]);
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+  return {
+    files,
+    loading,
+    error,
+    currentPath,
+    setCurrentPath,
+    fetchFiles,
+    navigateTo,
+    navigateUp,
+    upload
+  };
+}
+function UserWorkspace({
+  ownerType = "user",
+  ownerId,
+  orgId,
+  baseUrl,
+  authHeaders,
+  colors: colorOverrides,
+  onSelectFile,
+  showUpload = true
+}) {
+  const c = { ...defaultColors2, ...colorOverrides };
+  const ws = useUserWorkspace({ ownerType, ownerId, orgId, baseUrl, authHeaders });
+  const [preview, setPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const handleFileClick = async (f) => {
+    if (f.type === "dir") {
+      ws.navigateTo(f.name);
+      return;
+    }
+    onSelectFile?.(f);
+  };
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const data = reader.result;
+      const base64 = data.includes("base64,") ? data.split("base64,")[1] : btoa(data);
+      await ws.upload(file.name, base64);
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+  if (preview) {
+    return /* @__PURE__ */ jsxs("div", { style: { height: "100%", display: "flex", flexDirection: "column", fontFamily: "system-ui, sans-serif" }, children: [
+      /* @__PURE__ */ jsxs("div", { style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "8px 12px",
+        borderBottom: `1px solid ${c.border}`,
+        background: c.surface,
+        flexShrink: 0
+      }, children: [
+        /* @__PURE__ */ jsxs("span", { style: { fontSize: 12, color: c.text }, children: [
+          "\u{1F4C4} ",
+          preview.name
+        ] }),
+        /* @__PURE__ */ jsx("button", { onClick: () => setPreview(null), style: {
+          background: "none",
+          border: "none",
+          color: c.textSecondary,
+          cursor: "pointer",
+          fontSize: 13
+        }, children: "\u2190 Volver" })
+      ] }),
+      /* @__PURE__ */ jsx("div", { style: {
+        flex: 1,
+        overflow: "auto",
+        padding: 16,
+        background: c.bg,
+        color: c.text,
+        fontSize: 13,
+        lineHeight: 1.6,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word"
+      }, children: preview.content || "(archivo vac\xEDo)" })
+    ] });
+  }
+  return /* @__PURE__ */ jsxs("div", { style: { height: "100%", display: "flex", flexDirection: "column", fontFamily: "system-ui, sans-serif" }, children: [
+    /* @__PURE__ */ jsxs("div", { style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "8px 12px",
+      borderBottom: `1px solid ${c.border}`,
+      background: c.surface,
+      flexShrink: 0
+    }, children: [
+      /* @__PURE__ */ jsx("span", { style: { fontSize: 11, color: c.textSecondary, textTransform: "uppercase", fontWeight: 600, letterSpacing: ".04em" }, children: ownerType === "user" ? "\u{1F464} Mi Workspace" : ownerType === "agent" ? "\u{1F916} Agent Workspace" : "\u{1F3E2} Org Workspace" }),
+      /* @__PURE__ */ jsx("span", { style: { flex: 1 } }),
+      showUpload && /* @__PURE__ */ jsxs("label", { style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "4px 10px",
+        background: c.primary,
+        color: "#fff",
+        borderRadius: c.radius,
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 600
+      }, children: [
+        uploading ? "\u23F3" : "\u{1F4E4}",
+        " ",
+        uploading ? "Subiendo..." : "Upload",
+        /* @__PURE__ */ jsx("input", { type: "file", onChange: handleFileUpload, style: { display: "none" } })
+      ] })
+    ] }),
+    ws.currentPath && /* @__PURE__ */ jsxs("div", { style: {
+      padding: "6px 12px",
+      borderBottom: `1px solid ${c.border}`,
+      fontSize: 12,
+      color: c.textSecondary,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }, children: [
+      /* @__PURE__ */ jsx("button", { onClick: ws.navigateUp, style: {
+        background: "none",
+        border: "none",
+        color: c.primary,
+        cursor: "pointer",
+        fontSize: 12,
+        padding: 0
+      }, children: ".." }),
+      /* @__PURE__ */ jsx("span", { children: "/" }),
+      ws.currentPath.split("/").map((part, i, arr) => /* @__PURE__ */ jsxs("span", { children: [
+        /* @__PURE__ */ jsx(
+          "span",
+          {
+            onClick: () => {
+              const p = arr.slice(0, i + 1).join("/");
+              ws.setCurrentPath(p);
+              ws.fetchFiles(p);
+            },
+            style: { cursor: "pointer", color: i === arr.length - 1 ? c.text : c.primary },
+            children: part
+          }
+        ),
+        i < arr.length - 1 && /* @__PURE__ */ jsx("span", { style: { color: c.textSecondary }, children: " / " })
+      ] }, i))
+    ] }),
+    /* @__PURE__ */ jsx("div", { style: { flex: 1, overflow: "auto" }, children: ws.loading ? /* @__PURE__ */ jsx("div", { style: { padding: 16, color: c.textSecondary, fontSize: 13 }, children: "Cargando..." }) : ws.error ? /* @__PURE__ */ jsx("div", { style: { padding: 16, color: c.error, fontSize: 13 }, children: ws.error }) : ws.files.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { padding: 24, textAlign: "center", color: c.textSecondary, fontSize: 13 }, children: [
+      /* @__PURE__ */ jsx("div", { style: { fontSize: 32, marginBottom: 8 }, children: "\u{1F4ED}" }),
+      showUpload ? "Arrastr\xE1 archivos o clicke\xE1 Upload" : "No hay archivos"
+    ] }) : /* @__PURE__ */ jsx(
+      SortedFileTable,
+      {
+        files: ws.files,
+        onFileClick: handleFileClick,
+        colors: c
+      }
+    ) })
+  ] });
+}
+function SortedFileTable({
+  files,
+  onFileClick,
+  colors: c
+}) {
+  const sorted = [...files].sort((a, b) => {
+    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return /* @__PURE__ */ jsxs("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 }, children: [
+    /* @__PURE__ */ jsx("thead", { children: /* @__PURE__ */ jsxs("tr", { style: { borderBottom: `1px solid ${c.border}` }, children: [
+      /* @__PURE__ */ jsx("th", { style: { padding: "6px 12px", textAlign: "left", color: c.textSecondary, fontWeight: 500, width: 30 } }),
+      /* @__PURE__ */ jsx("th", { style: { padding: "6px 12px", textAlign: "left", color: c.textSecondary, fontWeight: 500 }, children: "Nombre" }),
+      /* @__PURE__ */ jsx("th", { style: { padding: "6px 12px", textAlign: "left", color: c.textSecondary, fontWeight: 500, width: 80 }, children: "Tipo" }),
+      /* @__PURE__ */ jsx("th", { style: { padding: "6px 12px", textAlign: "right", color: c.textSecondary, fontWeight: 500, width: 80 }, children: "Tama\xF1o" })
+    ] }) }),
+    /* @__PURE__ */ jsx("tbody", { children: sorted.map((f, i) => /* @__PURE__ */ jsxs(
+      "tr",
+      {
+        onClick: () => onFileClick(f),
+        style: {
+          cursor: "pointer",
+          borderBottom: `1px solid ${c.border}`,
+          background: i % 2 === 0 ? c.surface : c.bg
+        },
+        onMouseEnter: (e) => e.currentTarget.style.background = `${c.primary}10`,
+        onMouseLeave: (e) => e.currentTarget.style.background = i % 2 === 0 ? c.surface : c.bg,
+        children: [
+          /* @__PURE__ */ jsx("td", { style: { padding: "6px 12px", textAlign: "center" }, children: fileIcon2(f) }),
+          /* @__PURE__ */ jsx("td", { style: { padding: "6px 12px", color: f.type === "dir" ? c.primary : c.text }, children: f.name }),
+          /* @__PURE__ */ jsx("td", { style: { padding: "6px 12px", color: c.textSecondary }, children: f.type === "dir" ? "Directorio" : f.ext || "archivo" }),
+          /* @__PURE__ */ jsx("td", { style: { padding: "6px 12px", textAlign: "right", color: c.textSecondary }, children: f.type === "file" ? formatSize2(f.size) : "\u2014" })
+        ]
+      },
+      i
+    )) })
+  ] });
+}
+var defaultDropColors = {
+  bg: "#0d1117",
+  border: "#21262d",
+  primary: "#58a6ff",
+  text: "#e6edf3",
+  textSecondary: "#8b949e"
+};
+function UserFileDropZone({
+  onUploaded,
+  onUpload,
+  currentPath,
+  accept = ".xlsx,.xls,.csv,.pdf,.json,.md,.py,.txt,.ts,.js,.yml,.yaml",
+  colors: cOverride,
+  disableDrag
+}) {
+  const c = { ...defaultDropColors, ...cOverride };
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState(null);
+  const inputRef = React8.useRef(null);
+  const dragCounter = React8.useRef(0);
+  const uploadFile = useCallback(async (file) => {
+    setUploading(true);
+    setMessage(null);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          resolve(result.includes("base64,") ? result.split("base64,")[1] : result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const ok = await onUpload(file.name, base64, currentPath);
+      if (ok) {
+        setMessage(`\u2705 ${file.name}`);
+        onUploaded?.();
+      } else {
+        setMessage(`\u274C Error`);
+      }
+    } catch {
+      setMessage("\u274C Error");
+    } finally {
+      setUploading(false);
+      setTimeout(() => setMessage(null), 2500);
+    }
+  }, [onUpload, currentPath, onUploaded]);
+  const handleDragEnter = (e) => {
+    if (disableDrag) return;
+    e.preventDefault();
+    dragCounter.current++;
+    setDragging(true);
+  };
+  const handleDragLeave = (e) => {
+    if (disableDrag) return;
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setDragging(false);
+  };
+  const handleDrop = (e) => {
+    if (disableDrag) return;
+    e.preventDefault();
+    setDragging(false);
+    dragCounter.current = 0;
+    Array.from(e.dataTransfer.files).forEach(uploadFile);
+  };
+  return /* @__PURE__ */ jsx("div", { style: { padding: "4px 12px" }, children: /* @__PURE__ */ jsxs(
+    "div",
+    {
+      onDragEnter: handleDragEnter,
+      onDragOver: (e) => e.preventDefault(),
+      onDragLeave: handleDragLeave,
+      onDrop: handleDrop,
+      onClick: () => inputRef.current?.click(),
+      style: {
+        borderRadius: 6,
+        border: `1px dashed ${dragging ? c.primary : c.border}`,
+        padding: "8px 12px",
+        textAlign: "center",
+        cursor: "pointer",
+        fontSize: 12,
+        color: c.textSecondary,
+        fontFamily: "system-ui, sans-serif",
+        background: dragging ? `${c.primary}10` : "transparent",
+        transition: "border-color 0.2s, background 0.2s"
+      },
+      children: [
+        uploading ? /* @__PURE__ */ jsx("span", { children: "\u23F3 Subiendo..." }) : message ? /* @__PURE__ */ jsx("span", { children: message }) : /* @__PURE__ */ jsxs("span", { children: [
+          "\u{1F4E4} ",
+          disableDrag ? "Click para subir" : "Arrastr\xE1 archivos o click"
+        ] }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            ref: inputRef,
+            type: "file",
+            accept,
+            style: { display: "none" },
+            onChange: (e) => {
+              Array.from(e.target.files || []).forEach(uploadFile);
+              e.target.value = "";
+            }
+          }
+        )
+      ]
+    }
+  ) });
+}
 
 // src/sandbox/rest-provider.ts
 function createRestSandboxProvider(options = {}) {
@@ -1369,6 +1777,6 @@ function createMemorySandboxProvider() {
   };
 }
 
-export { AgentSkillPanel, GliaChat, GliaConversationList, GliaCopilot, GliaFileBrowser, GliaFileViewer, GliaSkillEditor, SkillManager, SomaPanel, createMemorySandboxProvider, createRestSandboxProvider, useGlia, useGliaAgents, useGliaConversations, useGliaFileContent, useGliaFiles, useGliaSkills };
+export { AgentSkillPanel, GliaChat, GliaConversationList, GliaCopilot, GliaFileBrowser, GliaFileViewer, GliaSkillEditor, SkillManager, SomaPanel, UserFileDropZone, UserWorkspace, createMemorySandboxProvider, createRestSandboxProvider, useGlia, useGliaAgents, useGliaConversations, useGliaFileContent, useGliaFiles, useGliaSkills, useUserWorkspace };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

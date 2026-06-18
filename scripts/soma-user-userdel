@@ -1,0 +1,50 @@
+#!/bin/bash
+# soma-user-userdel — destruye usuario Linux de un humano
+# Usage: soma-user-userdel <user-id>
+# Requiere: root o sudo
+
+set -eu
+
+USER_ID="${1:-}"
+
+if [ -z "$USER_ID" ]; then
+  echo "Usage: soma-user-userdel <user-id>" >&2
+  exit 1
+fi
+
+USERNAME="user-${USER_ID:0:12}"
+HOMEDIR="/home/${USERNAME}"
+
+echo "🗑️  Destroying user: $USERNAME"
+
+# ── 1. Verificar que existe ──────────────────────────────────────────
+if ! id "$USERNAME" >/dev/null 2>&1; then
+  echo "   ⚠️  User $USERNAME does not exist — nothing to destroy"
+  exit 0
+fi
+
+# ── 2. Matar procesos del usuario ────────────────────────────────────
+if command -v pkill >/dev/null 2>&1; then
+  pkill -u "$USERNAME" 2>/dev/null || true
+else
+  ps aux 2>/dev/null | grep "^$USERNAME" | awk '{print $2}' | xargs kill 2>/dev/null || true
+fi
+echo "   ✅ Processes killed"
+
+# ── 3. Borrar usuario y home ─────────────────────────────────────────
+if [ -f /etc/alpine-release ]; then
+  deluser --remove-home "$USERNAME" 2>/dev/null && echo "   ✅ User deleted with home" || {
+    deluser "$USERNAME" 2>/dev/null || true
+    rm -rf "$HOMEDIR" 2>/dev/null || true
+    echo "   ✅ User + home removed (fallback)"
+  }
+else
+  userdel -r "$USERNAME" 2>/dev/null && echo "   ✅ User deleted with home" || {
+    userdel "$USERNAME" 2>/dev/null || true
+    rm -rf "$HOMEDIR" 2>/dev/null || true
+    echo "   ✅ User + home removed (fallback)"
+  }
+fi
+
+echo ""
+echo "✅ User destroyed: $USER_ID"
