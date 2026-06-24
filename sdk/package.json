@@ -1,7 +1,7 @@
 {
-  "name": "@zea/soma-sdk",
-  "version": "0.1.0",
-  "description": "ZEA Soma SDK — Agent chat, workspace, skills, and agent management for React apps",
+  "name": "@zeacl/soma-sdk",
+  "version": "0.1.1",
+  "description": "ZEA Soma SDK — AI Assistant floating chat widget, workspace, skills, and agent management for React apps",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
