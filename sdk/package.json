@@ -44,6 +44,6 @@
     "url": "https://github.com/ZeaCl/soma.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   }
 }
