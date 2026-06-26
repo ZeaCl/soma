@@ -28,7 +28,7 @@ const S = {
   green: '#238636', red: '#f85149', purple: '#6e40c9',
 }
 
-export function SkillManager({ token, somaUrl = 'http://soma.zea.localhost', onSkillAssigned }: SkillManagerProps) {
+export function SkillManager({ token, somaUrl = 'https://soma.zea.cl', onSkillAssigned }: SkillManagerProps) {
   const [skills, setSkills] = useState<Skill[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)

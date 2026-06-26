@@ -1,6 +1,6 @@
 {
   "name": "@zea.cl/soma-sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ZEA Soma SDK — AI Assistant floating chat widget, workspace, skills, and agent management for React apps",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -21,8 +21,17 @@
     },
     "./styles/base.css": "./dist/styles/base.css"
   },
-  "files": ["dist"],
-  "keywords": ["ai", "agent", "chat", "react", "websocket", "llm"],
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "chat",
+    "react",
+    "websocket",
+    "llm"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"

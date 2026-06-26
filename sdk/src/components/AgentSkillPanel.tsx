@@ -23,7 +23,7 @@ const S = {
   green: '#238636', red: '#f85149', purple: '#6e40c9',
 }
 
-export function AgentSkillPanel({ agentId, token, somaUrl = 'http://soma.zea.localhost', onRefresh }: AgentSkillPanelProps) {
+export function AgentSkillPanel({ agentId, token, somaUrl = 'https://soma.zea.cl', onRefresh }: AgentSkillPanelProps) {
   const [allSkills, setAllSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
