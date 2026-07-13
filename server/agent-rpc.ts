@@ -509,12 +509,13 @@ wss.on('connection', (ws: WebSocket) => {
       return
     }
 
-    const { type, text, uid, cid } = json
+    const { type, text, uid, cid, token } = json
 
     // ── init: preparar sandbox → spawn pi → bridge ─────────────────────
     if (type === 'init') {
       const agentId = uid || ''
       const conversationId = cid || ''
+      const userToken = token || ''
 
       // Limpiar sesión anterior si existe
       const prev = sessions.get(ws)
@@ -543,6 +544,11 @@ wss.on('connection', (ws: WebSocket) => {
         home: sandbox.home,
         systemPrompt: config.systemPrompt,
       })
+
+      // Guardar token para pasar a pi como variable de entorno
+      if (userToken) {
+        process.env.ZEA_TOKEN = userToken
+      }
 
       // 4. Datos de sesión
       const sessionData = {
