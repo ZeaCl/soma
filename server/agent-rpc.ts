@@ -548,6 +548,9 @@ wss.on('connection', (ws: WebSocket) => {
       // Guardar token para pasar a pi como variable de entorno
       if (userToken) {
         process.env.ZEA_TOKEN = userToken
+        console.log(`🔑 ZEA_TOKEN recibido (${userToken.length} chars)`)
+      } else {
+        console.log('⚠️  ZEA_TOKEN NO recibido del frontend')
       }
 
       // 4. Datos de sesión
