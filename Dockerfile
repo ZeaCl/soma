@@ -48,6 +48,11 @@ RUN chmod +x /usr/local/bin/soma-agent-useradd /usr/local/bin/soma-agent-userdel
 # ── Directorios base para el sandbox ────────────────────────────────
 RUN mkdir -p /home /workspace/orgs /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages /app/.pi-agent-sessions
 
+# ── Pi agent config (provider, model) ──────────────────────────────
+RUN mkdir -p /app/.pi/agent && \
+    echo '{"defaultProvider":"deepseek","defaultModel":"deepseek-chat","defaultThinkingLevel":"high","theme":"dark"}' > /app/.pi/agent/settings.json && \
+    echo '{}' > /app/.pi/agent/auth.json
+
 # ── Skills para agentes IA ──────────────────────────────────────────
 COPY skill/ /root/.agents/skills/
 
