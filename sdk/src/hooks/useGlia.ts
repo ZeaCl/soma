@@ -40,7 +40,7 @@ export function useGlia(options: UseGliaOptions): UseGliaReturn {
 
     ws.onopen = () => {
       console.log('[useGlia] ws open → sending init')
-      ws.send(JSON.stringify({ type: 'init', uid: agentId, cid: conversationId, token: apiKey || '' }))
+      ws.send(JSON.stringify({ type: 'init', uid: agentId, cid: conversationId }))
     }
 
     ws.onmessage = (event) => {

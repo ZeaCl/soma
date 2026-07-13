@@ -47,13 +47,13 @@ export class RpcBridge extends EventEmitter {
     if (provider) piArgs.push('--provider', provider)
     if (model) piArgs.push('--model', model)
 
-    // sudo -u <username> bash -c 'HOME=<home> DEEPSEEK_API_KEY=... ZEA_TOKEN=... pi ...'
-    // Las API keys y tokens se pasan explícitamente porque sudo limpia el entorno
-    const extraEnv = ['DEEPSEEK_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ZEA_TOKEN']
+    // sudo -u <username> bash -c 'HOME=<home> DEEPSEEK_API_KEY=... pi ...'
+    // Las API keys se pasan explícitamente porque sudo limpia el entorno
+    const apiKeys = ['DEEPSEEK_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']
       .map(k => process.env[k] ? `${k}=${process.env[k]}` : '')
       .filter(Boolean)
       .join(' ')
-    const piCmd = `${extraEnv} HOME=${home} pi ${piArgs.map(a => JSON.stringify(a)).join(' ')}`
+    const piCmd = `${apiKeys} HOME=${home} pi ${piArgs.map(a => JSON.stringify(a)).join(' ')}`
     const args = ['-u', username, 'bash', '-c', piCmd]
 
     console.log(`🔵 RpcBridge: sudo -u ${username} pi --mode rpc`)
