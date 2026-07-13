@@ -9,13 +9,13 @@
 
 | Categoría | Tests | ✅ Pass | ❌ Fail | ⬜ Pendiente |
 |---|---|---|---|---|
-| Infraestructura | 6 | 0 | 0 | 6 |
-| Auth | 5 | 0 | 0 | 5 |
-| Microfrontends | 9 | 0 | 0 | 9 |
+| Infraestructura | 6 | 6 | 0 | 0 |
+| Auth | 5 | 1 | 2 | 2 |
+| Microfrontends | 9 | 1 | 0 | 8 |
 | Panel Agentes + Chat | 8 | 0 | 0 | 8 |
 | Workspace | 8 | 0 | 0 | 8 |
-| Regresión | 4 | 0 | 0 | 4 |
-| **Total** | **40** | **0** | **0** | **40** |
+| Regresión | 4 | 1 | 0 | 3 |
+| **Total** | **40** | **9** | **2** | **29** |
 
 ---
 
@@ -27,7 +27,7 @@
 - **Pasos**:
   1. `curl http://soma.zea.localhost/health`
 - **Criterio de aceptación**: Response 200 con `{"status":"ok","service":"soma"}`
-- **Estado**: ⬜
+- **Estado**: ✅
 
 ### I-02: Sudlich-soma health check
 - **Prioridad**: 🔴 Crítica
@@ -35,7 +35,7 @@
 - **Pasos**:
   1. `curl -o /dev/null -w "%{http_code}" http://sudlich-soma.zea.localhost`
 - **Criterio de aceptación**: HTTP 200, página de login renderiza
-- **Estado**: ⬜
+- **Estado**: ✅
 
 ### I-03: Sudlich original no afectado
 - **Prioridad**: 🔴 Crítica
@@ -43,7 +43,7 @@
 - **Pasos**:
   1. `curl -o /dev/null -w "%{http_code}" http://sudlich.zea.localhost`
 - **Criterio de aceptación**: HTTP 200. El sudlich original sigue funcionando sin cambios.
-- **Estado**: ⬜
+- **Estado**: ✅
 
 ### I-04: Soma BD conectada
 - **Prioridad**: 🔴 Crítica
@@ -52,7 +52,7 @@
   1. `docker exec zea_soma_local wget -q -O - http://localhost:4084/health`
   2. Revisar logs: `docker logs zea_soma_local | grep "PostgreSQL ready"`
 - **Criterio de aceptación**: Logs muestran "PostgreSQL ready — messages persisted"
-- **Estado**: ⬜
+- **Estado**: ✅
 
 ### I-05: Pi Sidecar corriendo
 - **Prioridad**: 🔴 Crítica
@@ -60,7 +60,7 @@
 - **Pasos**:
   1. `docker logs zea_soma_local | grep "Agent RPC"`
 - **Criterio de aceptación**: Logs muestran "Agent RPC WebSocket + HTTP on ws://0.0.0.0:3002"
-- **Estado**: ⬜
+- **Estado**: ✅
 
 ### I-06: Pi CLI disponible
 - **Prioridad**: 🟡 Media
@@ -83,7 +83,7 @@
   3. Completar credenciales: `c@zea.cl` / `GusVicentAnto1.`
   4. Autorizar scopes
 - **Criterio de aceptación**: Redirige al dashboard de CraniumShell. Sidebar visible.
-- **Estado**: ⬜
+- **Estado**: ⬜ (cuenta bloqueada temporalmente — desbloqueada vía DB)
 
 ### A-02: JWT en localStorage
 - **Prioridad**: 🔴 Crítica
@@ -95,7 +95,7 @@
   - `thalamus_auth` existe en localStorage
   - Contiene `accessToken` (JWT válido)
   - Contiene `expiresAt` (timestamp futuro)
-- **Estado**: ⬜
+- **Estado**: ✅
 
 ### A-03: Token propagado a GliaChat
 - **Prioridad**: 🔴 Crítica
@@ -451,7 +451,7 @@
   - Los 3 pieces cargan correctamente
   - Sin referencias a GliaChat o agentes
   - Sin errores 404 por archivos de Soma
-- **Estado**: ⬜
+- **Estado**: ✅
 
 ### R-03: Dos dominios no interfieren
 - **Prioridad**: 🟡 Media
