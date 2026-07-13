@@ -33,6 +33,7 @@
 
 - **[rules](rules.md)** — Convenciones y patrones descubiertos: sandbox, RPC bridge, skills, SDK, Docker, API
 - **[test-matrix](test-matrix.md)** — Matriz de pruebas: 40 casos, 6 categorías, criterios de aceptación
+- **[sequence-diagram](sequence-diagram.md)** — Diagrama de secuencia: flujo completo de un mensaje de chat
 
 ---
 
