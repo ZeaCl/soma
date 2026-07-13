@@ -222,18 +222,28 @@ function copyAgentAuth(home: string): void {
   const agentAuthDir = join(home, '.pi', 'agent')
   mkdirSync(agentAuthDir, { recursive: true })
 
+  // Extraer nombre de usuario del home (/home/soma-xxx → soma-xxx)
+  const username = home.split('/').pop() || ''
+
   for (const file of ['auth.json', 'settings.json']) {
     const src = join(hostAuthDir, file)
     const dst = join(agentAuthDir, file)
     if (existsSync(src) && !existsSync(dst)) {
       try {
         cpSync(src, dst)
+        // Dar ownership al usuario del agente para que pi pueda escribir .lock files
+        execSync(`chown ${username}:${username} "${dst}"`, { stdio: 'pipe' })
         console.log(`   📋 ${file} copiado al agente`)
       } catch (err: any) {
         console.warn(`   ⚠️  No se pudo copiar ${file}: ${err.message}`)
       }
     }
   }
+
+  // Asegurar que el directorio .pi/agent/ pertenece al agente
+  try {
+    execSync(`chown ${username}:${username} "${agentAuthDir}"`, { stdio: 'pipe' })
+  } catch { /* non-fatal */ }
 }
 
 /**
