@@ -509,12 +509,19 @@ wss.on('connection', (ws: WebSocket) => {
       return
     }
 
-    const { type, text, uid, cid } = json
+    const { type, text, uid, cid, token } = json
 
     // ── init: preparar sandbox → spawn pi → bridge ─────────────────────
     if (type === 'init') {
       const agentId = uid || ''
       const conversationId = cid || ''
+      const userToken = token || ''
+
+      // Guardar token para que el agente lo use vía ZEA_TOKEN
+      if (userToken) {
+        process.env.ZEA_TOKEN = userToken
+        console.log(`🔑 ZEA_TOKEN: ${userToken.length} chars`)
+      }
 
       // Limpiar sesión anterior si existe
       const prev = sessions.get(ws)

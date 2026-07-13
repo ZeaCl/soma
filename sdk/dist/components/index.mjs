@@ -35,7 +35,7 @@ function useGlia(options) {
     ws.binaryType = "arraybuffer";
     ws.onopen = () => {
       console.log("[useGlia] ws open \u2192 sending init");
-      ws.send(JSON.stringify({ type: "init", uid: agentId, cid: conversationId }));
+      ws.send(JSON.stringify({ type: "init", uid: agentId, cid: conversationId, token: apiKey || "" }));
     };
     ws.onmessage = (event) => {
       try {
@@ -759,7 +759,7 @@ var S2 = {
   ha: "#484f58",
   green: "#238636",
   red: "#f85149"};
-function AgentSkillPanel({ agentId, token, somaUrl = "http://soma.zea.localhost", onRefresh }) {
+function AgentSkillPanel({ agentId, token, somaUrl = "https://soma.zea.cl", onRefresh }) {
   const [allSkills, setAllSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

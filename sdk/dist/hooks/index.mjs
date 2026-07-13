@@ -34,7 +34,7 @@ function useGlia(options) {
     ws.binaryType = "arraybuffer";
     ws.onopen = () => {
       console.log("[useGlia] ws open \u2192 sending init");
-      ws.send(JSON.stringify({ type: "init", uid: agentId, cid: conversationId }));
+      ws.send(JSON.stringify({ type: "init", uid: agentId, cid: conversationId, token: apiKey || "" }));
     };
     ws.onmessage = (event) => {
       try {

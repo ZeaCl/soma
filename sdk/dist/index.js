@@ -41,7 +41,7 @@ function useGlia(options) {
     ws.binaryType = "arraybuffer";
     ws.onopen = () => {
       console.log("[useGlia] ws open \u2192 sending init");
-      ws.send(JSON.stringify({ type: "init", uid: agentId, cid: conversationId }));
+      ws.send(JSON.stringify({ type: "init", uid: agentId, cid: conversationId, token: apiKey || "" }));
     };
     ws.onmessage = (event) => {
       try {
@@ -963,7 +963,7 @@ var S2 = {
   ha: "#484f58",
   green: "#238636",
   red: "#f85149"};
-function AgentSkillPanel({ agentId, token, somaUrl = "http://soma.zea.localhost", onRefresh }) {
+function AgentSkillPanel({ agentId, token, somaUrl = "https://soma.zea.cl", onRefresh }) {
   const [allSkills, setAllSkills] = React8.useState([]);
   const [loading, setLoading] = React8.useState(true);
   const [error, setError] = React8.useState(null);
@@ -1122,7 +1122,7 @@ var S3 = {
   ha: "#484f58",
   green: "#238636",
   red: "#f85149"};
-function SkillManager({ token, somaUrl = "http://soma.zea.localhost", onSkillAssigned }) {
+function SkillManager({ token, somaUrl = "https://soma.zea.cl", onSkillAssigned }) {
   const [skills, setSkills] = React8.useState([]);
   const [agents, setAgents] = React8.useState([]);
   const [loading, setLoading] = React8.useState(true);

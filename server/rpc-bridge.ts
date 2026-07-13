@@ -49,7 +49,7 @@ export class RpcBridge extends EventEmitter {
 
     // sudo -u <username> bash -c 'HOME=<home> DEEPSEEK_API_KEY=... pi ...'
     // Las API keys se pasan explícitamente porque sudo limpia el entorno
-    const apiKeys = ['DEEPSEEK_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']
+    const apiKeys = ['DEEPSEEK_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ZEA_TOKEN']
       .map(k => process.env[k] ? `${k}=${process.env[k]}` : '')
       .filter(Boolean)
       .join(' ')
