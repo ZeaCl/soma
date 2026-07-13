@@ -50,7 +50,7 @@ RUN mkdir -p /home /workspace/orgs /root/.agents/skills /app/.pi-agent-skills /a
 
 # ── Pi agent config (provider, model) ──────────────────────────────
 RUN mkdir -p /app/.pi/agent && \
-    echo '{"defaultProvider":"anthropic","defaultModel":"claude-sonnet-4-20250514","defaultThinkingLevel":"high","theme":"dark"}' > /app/.pi/agent/settings.json && \
+    echo '{"defaultProvider":"deepseek","defaultModel":"deepseek-v4-pro","defaultThinkingLevel":"high","theme":"dark"}' > /app/.pi/agent/settings.json && \
     echo '{}' > /app/.pi/agent/auth.json
 
 # ── Skills para agentes IA ──────────────────────────────────────────
