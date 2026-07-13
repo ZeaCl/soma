@@ -48,6 +48,9 @@ RUN chmod +x /usr/local/bin/soma-agent-useradd /usr/local/bin/soma-agent-userdel
 # ── Directorios base para el sandbox ────────────────────────────────
 RUN mkdir -p /home /workspace/orgs /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages /app/.pi-agent-sessions
 
+# ── Skills para agentes IA ──────────────────────────────────────────
+COPY skill/ /root/.agents/skills/
+
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
