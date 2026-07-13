@@ -4,6 +4,46 @@ Bitácora cronológica de cambios. Formato: `## [YYYY-MM-DD] <tipo> | <descripci
 
 ---
 
+## [2026-07-13] feat | Integración completa Soma x Südlich
+
+**Proyecto**: https://github.com/orgs/ZeaCl/projects/18
+
+Integración end-to-end de Soma AgentHub en el frontend Südlich (fork `sudlich-soma`).
+El agente ahora responde en el panel derecho de CraniumShell y tiene acceso a:
+- Chat vía WebSocket con streaming de respuesta (DeepSeek v4 Pro)
+- Skills: `fund-management`, `user-sandbox`, `soma-agents`
+- ZEA_TOKEN para llamar APIs externas (fm_funds, fm_investors, etc.)
+- Sandbox Linux aislado por usuario (`soma-{id}` con chmod 700)
+
+### Servicios nuevos en compose
+- `soma` (:4084 API Elixir + :3002 Pi Sidecar)
+- `sudlich-soma` (:3099 frontend fork)
+
+### Repos modificados
+- **ZeaCl/soma**: 10 commits (skills, permisos, SDK v0.1.3, config pi, modelo)
+- **ZeaCl/sudlich-soma**: 5 commits (fork, SDK, microfrontends, panel agentes)
+- **ZeaCl/zea**: 3 commits (compose, Caddy, API keys LLM)
+- **ZeaCl/thalamus**: 1 commit (redirect URI en seeds)
+
+### 8 bugs encontrados y resueltos (ver troubleshooting.md)
+1. Caddy no ruteaba /agent-ws al sidecar
+2. Redirect URI no persistía en seeds de Thalamus
+3. CORS no incluía sudlich-soma
+4. Skills no persistían en Docker build
+5. fetchAgentSkills chicken-and-egg (home vacío → sin skills)
+6. Config de pi ausente (/app/.pi/agent/settings.json no existía)
+7. API keys LLM no en compose
+8. copyAgentAuth no hacía chown → pi sin permisos de escritura
+
+### Lecciones aprendidas
+- Debuggear capa por capa (Caddy → Sidecar → Bridge → pi → LLM)
+- pi v0.80.6 en RPC mode funciona pero DeepSeek tarda por el thinking level
+- Anthropic crédito agotado → no responde, pero sí da error explícito
+- Los archivos copiados por root necesitan chown al usuario destino
+- El JWT se pasa como ZEA_TOKEN en el entorno del subproceso pi
+- Las seeds de Thalamus se ejecutan en cada deploy → modificar seeds.exs
+- El SDK hay que publicarlo a npm, no parchear dist manualmente
+
 ## [2026-07-12] docs | .wiki/ — Memoria de equipo para Soma
 Creada la estructura `.wiki/` con session-state.md (cómo levantar, servicios, gotchas) y rules.md (patrones: sandbox, RPC bridge, skills, SDK, Docker, API Elixir). Implementación del sistema LLM Wiki de Karpathy para memoria persistente entre sesiones. Issues #26 y #27 del proyecto #18 (Soma x Südlich).
 

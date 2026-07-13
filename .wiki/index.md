@@ -39,4 +39,5 @@
 
 ## Log
 
-- **[log.md](log.md)** — Bitácora cronológica de cambios (desde 2026-06-24)
+- **[log.md](log.md)** — Bitácora cronológica de cambios
+- **[troubleshooting](troubleshooting.md)** — Guía de diagnóstico: 8 bugs comunes + debug capa por capa (desde 2026-06-24)
