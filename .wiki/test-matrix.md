@@ -10,12 +10,14 @@
 | Categoría | Tests | ✅ Pass | ❌ Fail | ⬜ Pendiente |
 |---|---|---|---|---|
 | Infraestructura | 6 | 6 | 0 | 0 |
-| Auth | 5 | 1 | 2 | 2 |
-| Microfrontends | 9 | 1 | 0 | 8 |
-| Panel Agentes + Chat | 8 | 0 | 0 | 8 |
-| Workspace | 8 | 0 | 0 | 8 |
-| Regresión | 4 | 1 | 0 | 3 |
-| **Total** | **40** | **9** | **2** | **29** |
+| Auth | 5 | 3 | 2 | 0 |
+| Microfrontends | 9 | 3 | 2 | 4 |
+| Panel Agentes + Chat | 8 | 1 | 3 | 4 |
+| Workspace | 8 | 2 | 1 | 5 |
+| Regresión | 4 | 4 | 0 | 0 |
+| **Total** | **40** | **19** | **8** | **13** |
+
+> **Nota**: 21 tests de Playwright pasan (19 equivalencias + 2 adicionales). 7 fallan por OAuth2 callback en entorno de test (el shell no renderiza post-login). 13 tests requieren validación manual con navegador.
 
 ---
 
