@@ -181,7 +181,12 @@ function fetchAgentSkills(agentId: string): AgentConfig {
   } catch { /* ignore */ }
 
   // 2. Listar skills del home del agente
-  const skills = listAgentSkills(home)
+  let skills = listAgentSkills(home)
+
+  // 3. Si no hay skills en el home, usar TODAS las disponibles en /root/.agents/skills/
+  if (skills.length === 0) {
+    skills = listAgentSkills('/root')
+  }
 
   if (skills.length > 0) {
     console.log(`🔧 Agent ${agentId.slice(0, 12)}: ${skills.length} skills locales, system_prompt=${systemPrompt ? 'sí' : 'no'}`)
