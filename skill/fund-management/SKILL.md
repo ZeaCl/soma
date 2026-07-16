@@ -155,6 +155,14 @@ curl -s "http://fm_capital_calls:4083/capital-calls" \
 # Ver detalle de una capital call
 curl -s "http://fm_capital_calls:4083/capital-calls/CALL_ID" \
   -H "Authorization: Bearer $ZEA_TOKEN"
+
+# Enviar una capital call (DRAFT → SENT)
+curl -s -X POST "http://fm_capital_calls:4083/capital-calls/CALL_ID/send" \
+  -H "Authorization: Bearer $ZEA_TOKEN"
+
+# Cancelar una capital call
+curl -s -X DELETE "http://fm_capital_calls:4083/capital-calls/CALL_ID" \
+  -H "Authorization: Bearer $ZEA_TOKEN"
 ```
 
 **Modelo de datos — Capital Call:**
@@ -166,7 +174,7 @@ curl -s "http://fm_capital_calls:4083/capital-calls/CALL_ID" \
 | `fund_name` | string | Nombre del fondo |
 | `amount` | string | Monto total |
 | `currency` | string | Moneda |
-| `status` | enum | `DRAFT`, `ISSUED`, `PAID`, `OVERDUE`, `CANCELLED` |
+| `status` | enum | `DRAFT`, `SENT`, `PAID`, `OVERDUE`, `CANCELLED` |
 | `due_date` | date | Fecha límite de pago |
 | `called_percentage` | float | Porcentaje llamado del compromiso |
 
@@ -286,6 +294,15 @@ curl -s -X POST "http://fm_capital_calls:4083/capital-calls" \
 - El fondo existe y está ACTIVO o FUNDRAISING
 - El monto es razonable (no negativo, no mayor al total_size)
 
+### ✏️ Enviar capital call
+
+```bash
+curl -s -X POST "http://fm_capital_calls:4083/capital-calls/CALL_ID/send" \
+  -H "Authorization: Bearer $ZEA_TOKEN"
+```
+
+**⚠️ Solo se puede enviar si está en estado DRAFT.**
+
 ### ✏️ Crear commitment
 
 ```bash
@@ -335,10 +352,8 @@ Para continuar, escribí: EJECUTAR borrado de Family Office Alpha
 ### 🗑️ Cancelar capital call
 
 ```bash
-curl -s -X PUT "http://fm_capital_calls:4083/capital-calls/CALL_ID" \
-  -H "Authorization: Bearer $ZEA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "CANCELLED"}'
+curl -s -X DELETE "http://fm_capital_calls:4083/capital-calls/CALL_ID" \
+  -H "Authorization: Bearer $ZEA_TOKEN"
 ```
 
 **Mismo protocolo que borrado — requiere `EJECUTAR`.**
