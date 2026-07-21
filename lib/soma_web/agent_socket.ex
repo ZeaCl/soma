@@ -44,12 +44,15 @@ defmodule SomaWeb.AgentSocket do
   def handle_in(_frame, state), do: {:ok, state}
 
   @impl true
-  def handle_info({:agent_event, %{"type" => "done", "final_text" => final_text, "final_thinking" => final_thinking}}, state) do
+  def handle_info({:agent_event, %{"type" => "done", "final_text" => final_text, "final_thinking" => final_thinking, "final_tools" => final_tools}}, state) do
     spawn(fn ->
+      tools = if Enum.empty?(final_tools), do: nil, else: final_tools
+      
       Soma.Conversations.add_message(state.conv_id, %{
         role: "assistant",
         content: if(final_text != "", do: final_text, else: "(sin respuesta)"),
-        thinking: if(final_thinking != "", do: final_thinking, else: nil)
+        thinking: if(final_thinking != "", do: final_thinking, else: nil),
+        tools: tools
       })
     end)
     {:push, {:text, Jason.encode!(%{type: "done"})}, state}

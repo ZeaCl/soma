@@ -383,7 +383,7 @@ defmodule SomaWeb.ApiController do
 
               # Chown the config directory back to the sandbox user
               username = Soma.Sandbox.username(agent_id)
-              System.cmd("chown", ["-R", "#{username}:#{username}", cfg_dir])
+              System.cmd("chown", ["-R", "#{username}:#{username}", Path.join([home, ".pi"])])
             {:error, reason} ->
               require Logger
               Logger.error("Sandbox creation failed for agent #{agent_id}: #{reason}")

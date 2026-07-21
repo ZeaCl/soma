@@ -79,7 +79,8 @@ defmodule Soma.AgentRunner do
       buffer: "",
       in_thinking: false,
       current_text: "",
-      current_thinking: ""
+      current_thinking: "",
+      current_tools: []
     }}
   end
 
@@ -87,7 +88,7 @@ defmodule Soma.AgentRunner do
   def handle_cast({:prompt, text}, state) do
     msg = Jason.encode!(%{type: "prompt", message: text}) <> "\n"
     Port.command(state.port, msg)
-    {:noreply, %{state | current_text: "", current_thinking: "", in_thinking: false}}
+    {:noreply, %{state | current_text: "", current_thinking: "", in_thinking: false, current_tools: []}}
   end
 
   @impl true
@@ -136,12 +137,22 @@ defmodule Soma.AgentRunner do
         handle_delta(delta, state)
       {:ok, %{"type" => "tool_execution_start", "toolName" => name, "args" => args}} ->
         send(state.caller, {:agent_event, %{"type" => "tool", "name" => name, "input" => args}})
-        state
+        %{state | current_tools: state.current_tools ++ [%{name: name, input: args}]}
       {:ok, %{"type" => "tool_execution_end", "result" => %{"content" => [%{"text" => text}]}}} ->
         send(state.caller, {:agent_event, %{"type" => "tool_result", "content" => text}})
-        state
+        # Update the last tool with the result
+        new_tools = case Enum.reverse(state.current_tools) do
+          [last | rest] -> Enum.reverse([Map.put(last, :result, text) | rest])
+          [] -> []
+        end
+        %{state | current_tools: new_tools}
       {:ok, %{"type" => "agent_end", "willRetry" => false}} ->
-        send(state.caller, {:agent_event, %{"type" => "done", "final_text" => state.current_text, "final_thinking" => state.current_thinking}})
+        send(state.caller, {:agent_event, %{
+          "type" => "done",
+          "final_text" => state.current_text,
+          "final_thinking" => state.current_thinking,
+          "final_tools" => state.current_tools
+        }})
         state
       {:ok, %{"type" => "extension_ui_request", "method" => method, "id" => id}} when method in ["select", "confirm", "input", "editor"] ->
         resp = %{type: "extension_ui_response", id: id, cancelled: true}
