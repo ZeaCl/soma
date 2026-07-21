@@ -94,9 +94,9 @@ export async function addMessage(conversationId: string, msg: Omit<StoredMessage
   try {
     const cleanId = conversationId.startsWith('dm:') ? conversationId.slice(3) : conversationId
     await pgPool.query(
-      `INSERT INTO conversations (id, organization_id, user_id, agent_id, app_context, title, last_message_at, message_count)
-       VALUES ($1, $2, $3, $4, $5, $6, now(), 1)
-       ON CONFLICT (id) DO UPDATE SET last_message_at = now(), message_count = conversations.message_count + 1`,
+      `INSERT INTO conversations (id, organization_id, user_id, agent_id, app_context, title, last_message_at, message_count, inserted_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now(), 1, now(), now())
+       ON CONFLICT (id) DO UPDATE SET last_message_at = now(), message_count = conversations.message_count + 1, updated_at = now()`,
       [cleanId, '00000000-0000-0000-0000-000000000000', 'system', cleanId, 'chat', msg.content?.slice(0, 80) || '']
     )
     const { rows } = await pgPool.query(
