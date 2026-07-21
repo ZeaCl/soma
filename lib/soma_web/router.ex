@@ -8,6 +8,12 @@ defmodule SomaWeb.Router do
     send_resp(conn, 200, Jason.encode!(%{status: "ok", service: "soma"}))
   end
 
+  get "/agent-ws" do
+    conn
+    |> WebSockAdapter.upgrade(SomaWeb.AgentSocket, %{}, timeout: 60_000)
+    |> halt()
+  end
+
   forward "/api", to: SomaWeb.Plugs.AuthRouter
 
   # Backward compat: legacy paths from Sudlich migration
