@@ -58,24 +58,6 @@ fi
 
 echo ""
 
-# Start Pi sidecar with auto-restart
-start_pi() {
-  cd /app/server
-  while true; do
-    echo "🚀 Starting Agent RPC..."
-    npx tsx agent-rpc.ts 2>&1
-    echo "⚠️  Agent RPC exited (code $?). Restarting in 3s..."
-    sleep 3
-  done
-}
-
-start_pi &
-PI_PID=$!
-
-# Start Soma Elixir app
+# Start Soma Elixir app in the foreground
 cd /app
-bin/soma start &
-SOMA_PID=$!
-
-# Wait for either to exit
-wait -n $SOMA_PID $PI_PID
+exec bin/soma start

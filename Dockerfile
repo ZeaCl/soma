@@ -28,14 +28,7 @@ RUN cp /etc/passwd /etc/passwd.default && cp /etc/group /etc/group.default && cp
 # ── Soma Elixir app ─────────────────────────────────────────────────
 COPY --from=build /app/_build/prod/rel/soma ./
 
-# ── Pi sidecar (Node.js): orquestador de subprocesos ────────────────
-COPY server/package.json /app/server/package.json
-WORKDIR /app/server
-RUN npm install --omit=dev 2>/dev/null || true
-COPY server/agent-rpc.ts /app/server/agent-rpc.ts
-COPY server/agent-sandbox.ts /app/server/agent-sandbox.ts
-COPY server/rpc-bridge.ts /app/server/rpc-bridge.ts
-WORKDIR /app
+
 
 # ── Scripts de sandbox (useradd/userdel para agentes y usuarios) ──
 COPY scripts/soma-agent-useradd /usr/local/bin/soma-agent-useradd
@@ -59,9 +52,8 @@ COPY skill/ /root/.agents/skills/
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-EXPOSE 4084 3002
+EXPOSE 4084
 ENV HOME=/app PORT=4084 MIX_ENV=prod SHELL=/bin/bash
-ENV AGENT_RPC_PORT=3002
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
     CMD wget --spider -q http://localhost:4084/health || exit 1
 CMD ["/start.sh"]

@@ -342,7 +342,7 @@ defmodule SomaWeb.ApiController do
         # Provision sandbox for the new agent
         agent_id = agent["id"]
         spawn(fn ->
-          case Sandbox.create(agent_id, org_id,
+          case Soma.Sandbox.create(agent_id, org_id,
             teams: attrs["teams"] || "",
             mounts: attrs["mounts"] || []
           ) do
@@ -358,6 +358,32 @@ defmodule SomaWeb.ApiController do
                   File.cp_r!(src, dst)
                 end
               end
+              
+              # Generate local config.json for the agent
+              cfg_dir = Path.join([home, ".pi", "agent"])
+              File.mkdir_p!(cfg_dir)
+              cfg_path = Path.join(cfg_dir, "config.json")
+              local_config = %{
+                "skills" => skill_names,
+                "system_prompt" => config["system_prompt"],
+                "engine" => config["engine"] || "pi",
+                "created_at" => DateTime.to_iso8601(DateTime.utc_now())
+              }
+              File.write!(cfg_path, Jason.encode!(local_config, pretty: true))
+              
+              # Copy auth.json/settings.json if they exist on the host
+              host_auth_dir = Path.join([System.get_env("HOME") || "/root", ".pi", "agent"])
+              for file <- ["auth.json", "settings.json"] do
+                src = Path.join(host_auth_dir, file)
+                dst = Path.join(cfg_dir, file)
+                if File.exists?(src) and not File.exists?(dst) do
+                  File.cp!(src, dst)
+                end
+              end
+
+              # Chown the config directory back to the sandbox user
+              username = Soma.Sandbox.username(agent_id)
+              System.cmd("chown", ["-R", "#{username}:#{username}", cfg_dir])
             {:error, reason} ->
               require Logger
               Logger.error("Sandbox creation failed for agent #{agent_id}: #{reason}")

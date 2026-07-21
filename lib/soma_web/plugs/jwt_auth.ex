@@ -22,6 +22,16 @@ defmodule SomaWeb.Plugs.JWTAuth do
     end
   end
 
+  def verify_token(token) do
+    case validate_jwt(token) do
+      {:ok, claims} ->
+        # We need a dummy conn to extract header if present, but since WS doesn't have it, we pass empty conn
+        org_id = get_org_id(%Plug.Conn{}, claims, token)
+        {:ok, claims, org_id}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp validate_jwt(token) do
     with {:ok, jwks} <- fetch_jwks(),
          {:ok, signer} <- build_signer(jwks, token),
