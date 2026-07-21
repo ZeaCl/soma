@@ -12,6 +12,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, watch } from 'fs'
 import { join } from 'path'
+import { randomUUID } from 'crypto'
 
 // ── Sandbox + RPC Bridge ──────────────────────────────────────────────────
 import { prepareAgent, destroyAgent, sandboxExists, sandboxUsername, agentHome } from './agent-sandbox'
@@ -99,10 +100,11 @@ export async function addMessage(conversationId: string, msg: Omit<StoredMessage
        ON CONFLICT (id) DO UPDATE SET last_message_at = now(), message_count = conversations.message_count + 1, updated_at = now()`,
       [cleanId, '00000000-0000-0000-0000-000000000000', 'system', cleanId, 'chat', msg.content?.slice(0, 80) || '']
     )
+    const msgId = randomUUID()
     const { rows } = await pgPool.query(
-      `INSERT INTO messages (conversation_id, role, content, thinking, tools)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
-      [cleanId, msg.role, msg.content, msg.thinking || null, msg.tools ? JSON.stringify(msg.tools) : null]
+      `INSERT INTO messages (id, conversation_id, role, content, thinking, tools)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+      [msgId, cleanId, msg.role, msg.content, msg.thinking || null, msg.tools ? JSON.stringify(msg.tools) : null]
     )
     return {
       id: rows[0].id,
