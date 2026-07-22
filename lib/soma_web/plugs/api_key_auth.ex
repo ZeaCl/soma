@@ -12,7 +12,7 @@ defmodule SomaWeb.Plugs.ApiKeyAuth do
   def call(conn, _opts) do
     case get_req_header(conn, "x-api-key") do
       [raw_key | _] when byte_size(raw_key) > 20 ->
-        key_hash = :crypto.hash(:sha256, raw_key) |> Base.encode64()
+        key_hash = Base.encode64(:crypto.hash(:sha256, raw_key))
 
         case Repo.get_by(ApiKey, key_hash: key_hash, is_active: true) do
           %ApiKey{organization_id: org_id, scopes: scopes} = key ->

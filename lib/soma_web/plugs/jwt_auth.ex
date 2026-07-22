@@ -100,7 +100,7 @@ defmodule SomaWeb.Plugs.JWTAuth do
 
           _ ->
             # 3. Domain roles claim
-            case (claims["domain_roles"] || []) |> List.first() do
+            case List.first(claims["domain_roles"] || []) do
               %{"org_id" => org_id} ->
                 org_id
 

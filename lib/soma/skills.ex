@@ -290,7 +290,7 @@ defmodule Soma.Skills do
   end
 
   defp random_password do
-    :crypto.strong_rand_bytes(16) |> Base.url_encode64(padding: false)
+    Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
   end
 
   # ── App Context (AGENTS.md) ──────────────────

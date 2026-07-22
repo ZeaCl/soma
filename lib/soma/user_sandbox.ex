@@ -64,7 +64,7 @@ defmodule Soma.UserSandbox do
 
   defp extract_uid_from_username(username) do
     case System.cmd("id", ["-u", username], stderr_to_stdout: true) do
-      {output, 0} -> String.trim(output) |> String.to_integer()
+      {output, 0} -> String.to_integer(String.trim(output))
       _ -> nil
     end
   end

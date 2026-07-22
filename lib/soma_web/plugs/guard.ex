@@ -10,7 +10,7 @@ defmodule SomaWeb.Plugs.Guard do
 
   # Dev bypass: x-test-user-id header (solo en entornos no-prod)
   def call(conn, _opts) do
-    test_user = Plug.Conn.get_req_header(conn, "x-test-user-id") |> List.first()
+    test_user = List.first(Plug.Conn.get_req_header(conn, "x-test-user-id"))
     env = Application.get_env(:soma, :environment, :dev)
 
     if test_user && env != :prod do
