@@ -10,8 +10,7 @@ defmodule Soma.Application do
     children = [
       Soma.Repo,
       {Phoenix.PubSub, name: Soma.PubSub},
-      SomaWeb.Endpoint,
-      PromEx
+      SomaWeb.Endpoint
     ]
 
     opts = [strategy: :one_for_one, name: Soma.Supervisor]
