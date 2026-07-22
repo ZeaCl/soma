@@ -48,6 +48,14 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> ConversationController.call(ConversationController.init([]))
     assert post.status == 201
 
+    # Show with messages
+    show2 = authed_conn(:get, "/#{conv.id}")
+            |> Plug.Conn.put_private(:plug_route, %{path_params: %{"id" => conv.id}})
+            |> ConversationController.call(ConversationController.init([]))
+    assert show2.status == 200
+    msgs = Jason.decode!(show2.resp_body)["messages"]
+    assert length(msgs) >= 1
+
     # Delete
     del = authed_conn(:delete, "/#{conv.id}") |> ConversationController.call(ConversationController.init([]))
     assert del.status == 200
@@ -85,6 +93,16 @@ defmodule SomaWeb.ControllerIntegrationTest do
 
     del = authed_conn(:delete, "/test-skill-ci") |> SkillController.call(SkillController.init([]))
     assert del.status == 204
+
+    # Assign to agents
+    assign =
+      :put
+      |> authed_conn("/fund-management/agents")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "fund-management"}})
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"agentIds" => []})
+      |> SkillController.call(SkillController.init([]))
+    assert assign.status == 200
   end
 
   # ── ApiKeyController ─────────────────────────────────────────────────
