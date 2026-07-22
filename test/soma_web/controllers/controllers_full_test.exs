@@ -123,7 +123,17 @@ defmodule SomaWeb.ControllersFullTest do
       :post
       |> authed("/upload")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"name" => "test.txt", "data" => Base.encode64("test")})
+      |> Map.put(:body_params, %{"name" => "test-fc.txt", "data" => Base.encode64("test")})
+      |> FileController.call(FileController.init([]))
+    assert conn.status == 200
+  end
+
+  test "file upload without data still works" do
+    conn =
+      :post
+      |> authed("/upload")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"name" => "empty.txt"})
       |> FileController.call(FileController.init([]))
     assert conn.status == 200
   end
@@ -133,35 +143,46 @@ defmodule SomaWeb.ControllersFullTest do
       :post
       |> authed("/mkdir")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"path" => "testdir"})
+      |> Map.put(:body_params, %{"path" => "testdir-fc"})
       |> FileController.call(FileController.init([]))
     assert conn.status == 200
   end
 
-  test "file rename works" do
+  test "file mkdir returns 409 for existing dir" do
+    Workspace.mkdir(@org_id, "existing-dir")
+    conn =
+      :post
+      |> authed("/mkdir")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"path" => "existing-dir"})
+      |> FileController.call(FileController.init([]))
+    assert conn.status == 409
+  end
+
+  test "file rename returns 404 for missing file" do
     conn =
       :put
       |> authed("/rename")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"path" => "old.txt", "newName" => "new.txt"})
+      |> Map.put(:body_params, %{"path" => "does-not-exist.txt", "newName" => "nope.txt"})
       |> FileController.call(FileController.init([]))
-    assert conn.status in [200, 404]
+    assert conn.status == 404
   end
 
-  test "file move works" do
+  test "file move returns 404 for missing source" do
     conn =
       :post
       |> authed("/move")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"source" => "a.txt", "dest" => "b.txt"})
+      |> Map.put(:body_params, %{"source" => "missing.txt", "dest" => "dest.txt"})
       |> FileController.call(FileController.init([]))
-    assert conn.status in [200, 404]
+    assert conn.status == 404
   end
 
-  test "file delete returns ok or not_found" do
-    conn = authed(:delete, "/?path=test.txt")
+  test "file delete returns 404 for missing file" do
+    conn = authed(:delete, "/?path=does-not-exist-xyz.txt")
            |> FileController.call(FileController.init([]))
-    assert conn.status in [200, 404]
+    assert conn.status == 404
   end
 
   test "file delete non-empty returns 409" do
@@ -179,12 +200,12 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status == 200
   end
 
-  test "file recover returns ok or error" do
+  test "file recover returns 500 for bad commit" do
     conn =
       :post
       |> authed("/recover")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"path" => "file.txt", "commit" => "abc123"})
+      |> Map.put(:body_params, %{"path" => "missing.txt", "commit" => "badhash"})
       |> FileController.call(FileController.init([]))
     assert conn.status in [200, 500]
   end
