@@ -91,7 +91,9 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> SkillController.call(SkillController.init([]))
     assert update.status == 200
 
-    del = authed_conn(:delete, "/test-skill-ci") |> SkillController.call(SkillController.init([]))
+    del = authed_conn(:delete, "/test-skill-ci")
+          |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+          |> SkillController.call(SkillController.init([]))
     assert del.status == 204
 
     # Assign to agents
@@ -103,6 +105,20 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> Map.put(:body_params, %{"agentIds" => []})
       |> SkillController.call(SkillController.init([]))
     assert assign.status == 200
+  end
+
+  test "GET /:name returns 404 for missing skill" do
+    conn = authed_conn(:get, "/no-existe")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
+           |> SkillController.call(SkillController.init([]))
+    assert conn.status == 404
+  end
+
+  test "DELETE /:name returns 404 for missing skill" do
+    conn = authed_conn(:delete, "/no-existe")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
+           |> SkillController.call(SkillController.init([]))
+    assert conn.status == 404
   end
 
   # ── ApiKeyController ─────────────────────────────────────────────────
