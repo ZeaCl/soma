@@ -25,6 +25,12 @@ defmodule Soma.FileSystem.Real do
   @impl true
   def rename(old, new), do: File.rename(old, new)
   @impl true
+  def rename!(old, new), do: File.rename!(old, new)
+  @impl true
+  def rm!(path), do: File.rm!(path)
+  @impl true
+  def chmod!(path, mode), do: File.chmod!(path, mode)
+  @impl true
   def stat(path), do: File.stat(path)
   @impl true
   def cp_r(src, dst), do: File.cp_r(src, dst)

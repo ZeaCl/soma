@@ -37,6 +37,12 @@ defmodule Soma.FileSystem.Mock do
   @impl true
   def rename(_old, _new), do: :ok
   @impl true
+  def rename!(_old, _new), do: :ok
+  @impl true
+  def rm!(_path), do: :ok
+  @impl true
+  def chmod!(_path, _mode), do: :ok
+  @impl true
   def stat(_path), do: %{size: 0}
   @impl true
   def cp_r(_src, _dst), do: {:ok, []}

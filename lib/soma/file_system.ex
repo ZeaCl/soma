@@ -14,8 +14,11 @@ defmodule Soma.FileSystem do
   @callback rmdir(binary()) :: :ok | {:error, term()}
   @callback rm_rf(binary()) :: {:ok, [binary()]} | {:error, term()}
   @callback rename(binary(), binary()) :: :ok | {:error, term()}
+  @callback rename!(binary(), binary()) :: :ok | no_return()
+  @callback rm!(binary()) :: :ok | {:error, term()}
   @callback stat(binary()) :: %{size: non_neg_integer()} | {:error, term()}
   @callback cp_r(binary(), binary()) :: {:ok, [binary()]} | {:error, term()}
+  @callback chmod!(binary(), integer()) :: :ok | no_return()
 
   def impl do
     Application.get_env(:soma, :file_system, Soma.FileSystem.Real)

@@ -1,15 +1,12 @@
 defmodule Soma.OrgWorkspace do
   @moduledoc """
-  Workspace compartido por organización.
-
-  Usa grupos Linux para control de acceso:
-  - /workspace/orgs/{orgId}/shared/ → grupo org-{orgId}, chmod 2770
-  - /workspace/orgs/{orgId}/teams/{teamId}/ → grupo team-{teamId}, chmod 2770
-
-  El setgid bit (g+s) asegura que archivos nuevos hereden el grupo.
+  Workspace compartido por organización — grupos Linux para control de acceso.
   """
 
   @workspace_root Application.compile_env(:soma, :org_workspace_root, "/workspace/orgs")
+
+  defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
+  defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
 
   # ── Path resolution ──────────────────────────────────────────
 
@@ -30,10 +27,10 @@ defmodule Soma.OrgWorkspace do
     dir = shared_dir(org_id)
     group = "org-#{org_id}"
 
-    unless File.exists?(dir) do
-      File.mkdir_p!(dir)
-      _ = System.cmd("chgrp", [group, dir], stderr_to_stdout: true)
-      File.chmod!(dir, 0o2770)
+    unless fs().exists?(dir) do
+      fs().mkdir_p(dir)
+      _ = shell().cmd("chgrp", [group, dir], stderr_to_stdout: true)
+      fs().chmod!(dir, 0o2770)
     end
 
     :ok
@@ -43,10 +40,10 @@ defmodule Soma.OrgWorkspace do
     dir = team_dir(org_id, team_id)
     group = "team-#{team_id}"
 
-    unless File.exists?(dir) do
-      File.mkdir_p!(dir)
-      _ = System.cmd("chgrp", [group, dir], stderr_to_stdout: true)
-      File.chmod!(dir, 0o2770)
+    unless fs().exists?(dir) do
+      fs().mkdir_p(dir)
+      _ = shell().cmd("chgrp", [group, dir], stderr_to_stdout: true)
+      fs().chmod!(dir, 0o2770)
     end
 
     :ok
@@ -58,7 +55,7 @@ defmodule Soma.OrgWorkspace do
     base = org_base(org_id)
     dir = if sub_path == "", do: base, else: Path.join(base, sub_path)
 
-    if File.dir?(dir) do
+    if fs().dir?(dir) do
       {:ok, scan_dir(dir, dir, "")}
     else
       {:ok, []}
@@ -66,7 +63,7 @@ defmodule Soma.OrgWorkspace do
   end
 
   defp scan_dir(root, dir, relative) do
-    case File.ls(dir) do
+    case fs().ls(dir) do
       {:ok, entries} ->
         entries
         |> Enum.reject(&String.starts_with?(&1, "."))
@@ -75,10 +72,10 @@ defmodule Soma.OrgWorkspace do
           full = Path.join(dir, name)
           rel = if relative == "", do: name, else: Path.join(relative, name)
 
-          if File.dir?(full) do
-            [{rel, "dir", File.stat!(full).size} | scan_dir(root, full, rel)]
+          if fs().dir?(full) do
+            [{rel, "dir", fs().stat(full).size} | scan_dir(root, full, rel)]
           else
-            [{rel, "file", File.stat!(full).size, Path.extname(name)}]
+            [{rel, "file", fs().stat(full).size, Path.extname(name)}]
           end
         end)
 
@@ -91,8 +88,8 @@ defmodule Soma.OrgWorkspace do
 
   def read_file(org_id, relative_path) do
     with {:ok, full} <- resolve(org_id, relative_path),
-         true <- File.exists?(full) do
-      {:ok, File.read!(full)}
+         true <- fs().exists?(full) do
+      {:ok, fs().read!(full)}
     else
       _ -> {:error, :not_found}
     end
@@ -103,8 +100,8 @@ defmodule Soma.OrgWorkspace do
   def write_file(org_id, relative_path, content) do
     with {:ok, full} <- resolve(org_id, relative_path) do
       dir = Path.dirname(full)
-      File.mkdir_p!(dir)
-      File.write!(full, content)
+      fs().mkdir_p(dir)
+      fs().write(full, content)
       {:ok, relative_path}
     end
   end
@@ -113,10 +110,10 @@ defmodule Soma.OrgWorkspace do
 
   def mkdir(org_id, relative_path) do
     with {:ok, full} <- resolve(org_id, relative_path) do
-      if File.exists?(full) do
+      if fs().exists?(full) do
         {:error, :already_exists}
       else
-        File.mkdir_p!(full)
+        fs().mkdir_p(full)
         {:ok, relative_path}
       end
     end
@@ -126,19 +123,19 @@ defmodule Soma.OrgWorkspace do
 
   def delete(org_id, relative_path) do
     with {:ok, full} <- resolve(org_id, relative_path),
-         true <- File.exists?(full) do
+         true <- fs().exists?(full) do
       result =
-        if File.dir?(full) do
-          case File.ls(full) do
+        if fs().dir?(full) do
+          case fs().ls(full) do
             {:ok, []} ->
-              File.rmdir!(full)
+              fs().rmdir(full)
               :ok
 
             _ ->
               :directory_not_empty
           end
         else
-          File.rm!(full)
+          fs().rm!(full)
           :ok
         end
 
@@ -156,9 +153,9 @@ defmodule Soma.OrgWorkspace do
   def move(org_id, source, dest) do
     with {:ok, full_src} <- resolve(org_id, source),
          {:ok, full_dst} <- resolve(org_id, dest),
-         true <- File.exists?(full_src) do
-      File.mkdir_p!(Path.dirname(full_dst))
-      File.rename!(full_src, full_dst)
+         true <- fs().exists?(full_src) do
+      fs().mkdir_p(Path.dirname(full_dst))
+      fs().rename!(full_src, full_dst)
       {:ok, dest}
     else
       _ -> {:error, :not_found}
