@@ -1,8 +1,13 @@
 {
   "name": "@zea/soma-cli",
-  "version": "0.1.0",
-  "description": "CLI for ZEA Soma AgentHub",
-  "bin": { "soma": "./index.js" },
+  "version": "0.2.0",
+  "description": "CLI for ZEA Soma AgentHub — agentes, chat, skills, sandboxes",
+  "type": "module",
+  "bin": { "zea-soma": "./index.js" },
   "license": "Apache-2.0",
-  "dependencies": {}
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "commander": "^12.0.0",
+    "ws": "^8.21.0"
+  }
 }

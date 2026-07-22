@@ -55,5 +55,5 @@ RUN chmod +x /start.sh
 EXPOSE 4084
 ENV HOME=/app PORT=4084 MIX_ENV=prod SHELL=/bin/bash
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
-    CMD wget --spider -q http://localhost:4084/health || exit 1
+    CMD wget --spider -q http://127.0.0.1:4084/health || exit 1
 CMD ["/start.sh"]
