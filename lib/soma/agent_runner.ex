@@ -40,6 +40,8 @@ defmodule Soma.AgentRunner do
     username = Sandbox.username(agent_id)
     home = Sandbox.home_dir(agent_id)
 
+    Soma.AgentMetrics.session_started(agent_id, "pi")
+
     api_keys =
       [
         {"ZEA_TOKEN", token},
@@ -87,21 +89,25 @@ defmodule Soma.AgentRunner do
      %{
        port: port,
        caller: caller,
+       agent_id: agent_id,
        buffer: "",
        in_thinking: false,
        current_text: "",
        current_thinking: "",
-       current_tools: []
+       current_tools: [],
+       prompt_start: nil,
+       thinking_start: nil
      }}
   end
 
   @impl true
   def handle_cast({:prompt, text}, state) do
+    Soma.AgentMetrics.request_sent(state.agent_id)
     msg = Jason.encode!(%{type: "prompt", message: text}) <> "\n"
     shell().port_command(state.port, msg)
 
     {:noreply,
-     %{state | current_text: "", current_thinking: "", in_thinking: false, current_tools: []}}
+     %{state | current_text: "", current_thinking: "", in_thinking: false, current_tools: [], prompt_start: System.monotonic_time(:millisecond)}}
   end
 
   @impl true
@@ -161,6 +167,7 @@ defmodule Soma.AgentRunner do
         handle_delta(delta, state)
 
       {:ok, %{"type" => "tool_execution_start", "toolName" => name, "args" => args}} ->
+        Soma.AgentMetrics.tool_called(state.agent_id, name)
         send(state.caller, {:agent_event, %{"type" => "tool", "name" => name, "input" => args}})
         %{state | current_tools: state.current_tools ++ [%{name: name, input: args}]}
 
@@ -176,6 +183,11 @@ defmodule Soma.AgentRunner do
         %{state | current_tools: new_tools}
 
       {:ok, %{"type" => "agent_end", "willRetry" => false}} ->
+        if state.prompt_start do
+          duration = System.monotonic_time(:millisecond) - state.prompt_start
+          Soma.AgentMetrics.response_duration(state.agent_id, "pi", duration)
+        end
+
         send(
           state.caller,
           {:agent_event,
@@ -208,7 +220,7 @@ defmodule Soma.AgentRunner do
 
   defp handle_delta(%{"type" => "thinking_start"}, state) do
     send(state.caller, {:agent_event, %{"type" => "thinking_start"}})
-    %{state | in_thinking: true}
+    %{state | in_thinking: true, thinking_start: System.monotonic_time(:millisecond)}
   end
 
   defp handle_delta(%{"type" => "thinking_delta", "delta" => delta}, state) do
@@ -218,10 +230,15 @@ defmodule Soma.AgentRunner do
 
   defp handle_delta(%{"type" => "thinking_end"}, state) do
     send(state.caller, {:agent_event, %{"type" => "thinking_end"}})
-    %{state | in_thinking: false}
+    if state.thinking_start do
+      duration = System.monotonic_time(:millisecond) - state.thinking_start
+      Soma.AgentMetrics.thinking_duration(state.agent_id, duration)
+    end
+    %{state | in_thinking: false, thinking_start: nil}
   end
 
   defp handle_delta(%{"type" => "error", "reason" => reason}, state) do
+    Soma.AgentMetrics.error_occurred(state.agent_id, reason)
     send(
       state.caller,
       {:agent_event, %{"type" => "error", "message" => "Agent error: #{reason}"}}

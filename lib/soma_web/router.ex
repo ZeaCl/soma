@@ -8,6 +8,12 @@ defmodule SomaWeb.Router do
     send_resp(conn, 200, Jason.encode!(%{status: "ok", service: "soma"}))
   end
 
+  get "/metrics" do
+    conn
+    |> put_resp_content_type("text/plain")
+    |> send_resp(200, PromEx.export())
+  end
+
   get "/agent-ws" do
     conn
     |> WebSockAdapter.upgrade(SomaWeb.AgentSocket, %{}, timeout: 60_000)
