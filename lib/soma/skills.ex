@@ -8,6 +8,16 @@ defmodule Soma.Skills do
   @builtin_dir System.get_env("SKILLS_DIR", "/root/.agents/skills")
   @custom_dir "/app/.pi-agent-skills"
 
+  # ── Dependency injection ────────────────────
+
+  defp thalamus_client do
+    Application.get_env(:soma, :thalamus_client, Soma.ThalamusClient.Real)
+  end
+
+  defp file_system do
+    Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
+  end
+
   # ── List ─────────────────────────────────────
 
   def list(org_id) when is_binary(org_id) do
@@ -18,21 +28,13 @@ defmodule Soma.Skills do
 
     custom_names = MapSet.new(custom, fn {name, _} -> name end)
     builtin = list_builtin_skills()
-
     builtin_names = Enum.map(builtin, & &1.name)
 
-    # Builtin skills, mark overridden ones as custom
     skills =
-      builtin
-      |> Enum.map(fn skill ->
-        if MapSet.member?(custom_names, skill.name) do
-          Map.put(skill, :custom, true)
-        else
-          Map.put(skill, :custom, false)
-        end
+      Enum.map(builtin, fn skill ->
+        Map.put(skill, :custom, MapSet.member?(custom_names, skill.name))
       end)
 
-    # Add pure custom skills (not overriding any builtin)
     pure_custom =
       Enum.flat_map(custom, fn {name, content} ->
         if name in builtin_names do
@@ -43,14 +45,7 @@ defmodule Soma.Skills do
             |> String.split("\n")
             |> Enum.find(&(&1 != "" && !String.starts_with?(&1, ["---", "name:", "#"])))
 
-          [
-            %{
-              name: name,
-              description: String.slice(desc || "", 0, 120),
-              builtin: false,
-              custom: true
-            }
-          ]
+          [%{name: name, description: String.slice(desc || "", 0, 120), builtin: false, custom: true}]
         end
       end)
 
@@ -63,17 +58,12 @@ defmodule Soma.Skills do
 
   defp add_agent_assignments(skills) do
     registry = read_agent_registry()
-
-    Enum.map(skills, fn skill ->
-      agents = Map.get(registry, skill.name, [])
-      Map.put(skill, :agents, agents)
-    end)
+    Enum.map(skills, fn skill -> Map.put(skill, :agents, Map.get(registry, skill.name, [])) end)
   end
 
   defp read_agent_registry do
     reg_file = Path.join(@custom_dir, ".registry.json")
-
-    case File.read(reg_file) do
+    case file_system().read(reg_file) do
       {:ok, json} -> Jason.decode!(json)
       _ -> %{}
     end
@@ -82,17 +72,14 @@ defmodule Soma.Skills do
   # ── Get ──────────────────────────────────────
 
   def get(org_id, name) do
-    # Check custom override first
     case Repo.get_by(CustomSkill, organization_id: org_id, name: name, is_active: true) do
       %{content: content} ->
         {:ok, content, :custom}
 
       nil ->
-        # Try builtin
         path = Path.join(@builtin_dir, "#{name}/SKILL.md")
-
-        if File.exists?(path) do
-          {:ok, File.read!(path), :builtin}
+        if file_system().exists?(path) do
+          {:ok, file_system().read!(path), :builtin}
         else
           {:error, :not_found}
         end
@@ -105,20 +92,11 @@ defmodule Soma.Skills do
     case Repo.get_by(CustomSkill, organization_id: org_id, name: name) do
       nil ->
         %CustomSkill{}
-        |> CustomSkill.changeset(%{
-          organization_id: org_id,
-          name: name,
-          content: content,
-          is_active: true
-        })
+        |> CustomSkill.changeset(%{organization_id: org_id, name: name, content: content, is_active: true})
         |> Repo.insert()
         |> case do
-          {:ok, skill} ->
-            write_custom_skill_file(name, content)
-            {:ok, skill}
-
-          error ->
-            error
+          {:ok, skill} -> write_custom_skill_file(name, content); {:ok, skill}
+          error -> error
         end
 
       skill ->
@@ -126,12 +104,8 @@ defmodule Soma.Skills do
         |> CustomSkill.changeset(%{content: content, is_active: true})
         |> Repo.update()
         |> case do
-          {:ok, skill} ->
-            write_custom_skill_file(name, content)
-            {:ok, skill}
-
-          error ->
-            error
+          {:ok, skill} -> write_custom_skill_file(name, content); {:ok, skill}
+          error -> error
         end
     end
   end
@@ -140,9 +114,7 @@ defmodule Soma.Skills do
 
   def delete(org_id, name) do
     case Repo.get_by(CustomSkill, organization_id: org_id, name: name) do
-      nil ->
-        {:error, :not_found}
-
+      nil -> {:error, :not_found}
       skill ->
         Repo.update(CustomSkill.changeset(skill, %{is_active: false}))
         remove_custom_skill_file(name)
@@ -152,19 +124,13 @@ defmodule Soma.Skills do
 
   # ── Agent Assignment ─────────────────────────
 
-  def assign_to_agents(org_id, name, agent_ids) do
-    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
-
+  def assign_to_agents(_org_id, name, agent_ids) do
     for agent_id <- agent_ids do
       Task.start(fn ->
-        Req.patch("#{thalamus_url}/api/users/#{agent_id}",
-          json: %{agent_config: %{skills: [name]}},
-          receive_timeout: 5000
-        )
+        thalamus_client().update_user(agent_id, %{skills: [name]}, nil)
       end)
     end
 
-    # Save assignment to local registry
     save_agent_registry(name, agent_ids)
     {:ok, %{name: name, assigned_to: agent_ids}}
   end
@@ -172,53 +138,24 @@ defmodule Soma.Skills do
   # ── Agent Config ─────────────────────────────
 
   def list_agents(token \\ nil) do
-    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
-    headers = if token, do: [authorization: "Bearer #{token}"], else: []
-
-    case Req.get("#{thalamus_url}/api/users?is_agent=true",
-           headers: headers,
-           receive_timeout: 5000
-         ) do
-      {:ok, %{status: 200, body: body}} ->
-        agents = body["data"] || body["users"] || []
-        {:ok, agents}
-
-      _ ->
-        {:ok, []}
-    end
+    thalamus_client().get_user(token)
   end
 
   def update_agent_config(agent_id, attrs) do
-    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
-    # Ensure engine field is supported
     config = Map.take(attrs, ["system_prompt", "skills", "tools", "workspace_paths", "engine"])
-
-    case Req.patch("#{thalamus_url}/api/users/#{agent_id}",
-           json: %{agent_config: config},
-           receive_timeout: 5000
-         ) do
-      {:ok, %{status: 200}} ->
-        # Also update local config file for fallback
+    case thalamus_client().update_user(agent_id, config, nil) do
+      {:ok, _} ->
         update_local_config(agent_id, config)
         {:ok, config}
-
-      {:ok, %{status: code}} ->
-        {:error, "Thalamus returned #{code}"}
-
-      {:error, reason} ->
-        {:error, inspect(reason)}
+      error -> error
     end
   end
 
   def create_agent(org_id, attrs, token \\ nil) do
-    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
-
     body = %{
-      email: attrs["email"],
-      name: attrs["name"],
+      email: attrs["email"], name: attrs["name"],
       password: attrs["password"] || random_password(),
-      is_agent: true,
-      organization_id: org_id,
+      is_agent: true, organization_id: org_id,
       agent_config: %{
         engine: attrs["engine"] || "pi",
         system_prompt: attrs["system_prompt"],
@@ -228,57 +165,56 @@ defmodule Soma.Skills do
       }
     }
 
-    # Use internal API (no auth required for inter-service calls)
-    headers = if token, do: [authorization: "Bearer #{token}"], else: []
-
-    case Req.post("#{thalamus_url}/api/users",
-           json: body,
-           headers: headers,
-           receive_timeout: 5000
-         ) do
-      {:ok, %{status: 201, body: resp}} ->
-        agent = resp["data"] || resp
+    case thalamus_client().create_user(body, token) do
+      {:ok, agent} ->
         update_local_config(agent["id"], agent["agent_config"] || %{})
         {:ok, agent}
-
-      {:ok, %{status: code, body: resp}} ->
-        {:error, resp["error"] || "Thalamus returned #{code}"}
-
-      {:error, reason} ->
-        {:error, inspect(reason)}
+      error -> error
     end
   end
 
   def get_agent(agent_id) do
-    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
-
-    case Req.get("#{thalamus_url}/api/users/#{agent_id}", receive_timeout: 5000) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, body["data"] || body}
-
-      {:ok, %{status: 404}} ->
-        {:error, :not_found}
-
-      {:error, _} ->
-        {:error, :not_found}
-    end
+    thalamus_client().get_user_by_id(agent_id)
   end
 
   def delete_agent(agent_id) do
-    thalamus_url = Application.get_env(:soma, :thalamus)[:url]
+    thalamus_client().delete_user(agent_id)
+  end
 
-    case Req.delete("#{thalamus_url}/api/users/#{agent_id}", receive_timeout: 5000) do
-      {:ok, %{status: code}} when code in [200, 204] -> {:ok, agent_id}
-      {:ok, %{status: 404}} -> {:error, :not_found}
-      {:error, reason} -> {:error, inspect(reason)}
+  # ── App Context ──────────────────────────────
+
+  def load_app_context(org_id, app) do
+    path = Path.join(["/workspace/orgs", org_id, app, "AGENTS.md"])
+    if file_system().exists?(path) do
+      content = file_system().read!(path)
+      expanded = expand_references(content, Path.dirname(path))
+      {:ok, expanded}
+    else
+      {:ok, nil}
     end
+  end
+
+  defp expand_references(content, base_dir) do
+    Regex.replace(~r/`([^`]+\.(?:md|html|json))`/, content, fn _, fpath ->
+      resolved = Path.expand(fpath, base_dir)
+      if file_system().exists?(resolved) do
+        "`#{fpath}`:\n\n#{file_system().read!(resolved)}\n"
+      else
+        "`#{fpath}` (file not found)"
+      end
+    end)
+  end
+
+  # ── Private ──────────────────────────────────
+
+  defp random_password do
+    Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
   end
 
   defp update_local_config(agent_id, config) do
     config_dir = "/tmp/agent-configs"
-    File.mkdir_p!(config_dir)
-
-    File.write!(
+    file_system().mkdir_p(config_dir)
+    file_system().write(
       Path.join(config_dir, "#{agent_id}.json"),
       Jason.encode!(%{
         thalamus_user_id: agent_id,
@@ -289,63 +225,24 @@ defmodule Soma.Skills do
     )
   end
 
-  defp random_password do
-    Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
-  end
-
-  # ── App Context (AGENTS.md) ──────────────────
-
-  def load_app_context(org_id, app) do
-    path = Path.join(["/workspace/orgs", org_id, app, "AGENTS.md"])
-
-    if File.exists?(path) do
-      content = File.read!(path)
-      # Also resolve referenced files like site-interno/design.html
-      expanded = expand_references(content, Path.dirname(path))
-      {:ok, expanded}
-    else
-      {:ok, nil}
-    end
-  end
-
-  defp expand_references(content, base_dir) do
-    # Resolve relative file references like `site-interno/design.html`
-    Regex.replace(~r/`([^`]+\.(?:md|html|json))`/, content, fn _, path ->
-      resolved = Path.expand(path, base_dir)
-
-      if File.exists?(resolved) do
-        "`#{path}`:\n\n#{File.read!(resolved)}\n"
-      else
-        "`#{path}` (file not found)"
-      end
-    end)
-  end
-
-  # ── Private ──────────────────────────────────
-
   defp list_builtin_skills do
-    if File.dir?(@builtin_dir) do
-      case File.ls(@builtin_dir) do
+    if file_system().dir?(@builtin_dir) do
+      case file_system().ls(@builtin_dir) do
         {:ok, dirs} ->
           Enum.flat_map(dirs, fn dir ->
             path = Path.join([@builtin_dir, dir, "SKILL.md"])
-
-            if File.exists?(path) do
-              content = File.read!(path)
-
+            if file_system().exists?(path) do
+              content = file_system().read!(path)
               [description | _] =
                 content
                 |> String.split("\n")
                 |> Enum.filter(&(&1 != "" && !String.starts_with?(&1, ["---", "name:", "#"])))
-
               [%{name: dir, description: String.slice(description || "", 0, 120), builtin: true}]
             else
               []
             end
           end)
-
-        _ ->
-          []
+        _ -> []
       end
     else
       []
@@ -354,37 +251,31 @@ defmodule Soma.Skills do
 
   defp write_custom_skill_file(name, content) do
     dir = Path.join(@custom_dir, name)
-    File.mkdir_p!(dir)
-    File.write!(Path.join(dir, "SKILL.md"), content)
+    file_system().mkdir_p(dir)
+    file_system().write(Path.join(dir, "SKILL.md"), content)
     save_custom_registry(name)
   end
 
   defp remove_custom_skill_file(name) do
     dir = Path.join(@custom_dir, name)
-    if File.dir?(dir), do: File.rm_rf!(dir)
+    if file_system().dir?(dir), do: file_system().rm_rf(dir)
   end
 
   defp save_custom_registry(name) do
     reg_file = Path.join(@custom_dir, ".registry.json")
-
-    reg =
-      case File.read(reg_file) do
-        {:ok, json} -> Jason.decode!(json)
-        _ -> %{}
-      end
-
-    File.write!(reg_file, Jason.encode!(Map.put(reg, name, Map.get(reg, name, []))))
+    reg = case file_system().read(reg_file) do
+      {:ok, json} -> Jason.decode!(json)
+      _ -> %{}
+    end
+    file_system().write(reg_file, Jason.encode!(Map.put(reg, name, Map.get(reg, name, []))))
   end
 
   defp save_agent_registry(name, agent_ids) do
     reg_file = Path.join(@custom_dir, ".registry.json")
-
-    reg =
-      case File.read(reg_file) do
-        {:ok, json} -> Jason.decode!(json)
-        _ -> %{}
-      end
-
-    File.write!(reg_file, Jason.encode!(Map.put(reg, name, agent_ids)))
+    reg = case file_system().read(reg_file) do
+      {:ok, json} -> Jason.decode!(json)
+      _ -> %{}
+    end
+    file_system().write(reg_file, Jason.encode!(Map.put(reg, name, agent_ids)))
   end
 end
