@@ -9,7 +9,7 @@ export async function api(method, path, { body, token, baseUrl, raw, timeout } =
   const t = token || opts.token;
   const base = baseUrl || opts.baseUrl;
 
-  const urlPath = path.startsWith('/api') || path.startsWith('/health') ? path : `/api${path}`;
+  const urlPath = (path.startsWith('/api/') || path === '/api' || path.startsWith('/health')) ? path : `/api${path}`;
   const url = new URL(urlPath, base);
 
   const headers = { 'Content-Type': 'application/json' };
