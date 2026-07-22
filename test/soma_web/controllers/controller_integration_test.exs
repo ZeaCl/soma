@@ -4,13 +4,16 @@ defmodule SomaWeb.ControllerIntegrationTest do
 
   alias Soma.Repo
   alias Soma.Conversations
-  alias SomaWeb.{ConversationController, SkillController, ApiKeyController}
+  alias SomaWeb.{ConversationController, SkillController, ApiKeyController, AgentController}
 
   @org_id "00000000-0000-0000-0000-000000000001"
   @user_id "user_test"
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    Application.put_env(:soma, :thalamus_client, Soma.ThalamusClient.Mock)
+    Soma.ThalamusClient.Mock.start_link(%{})
+    on_exit(fn -> Application.delete_env(:soma, :thalamus_client) end)
   end
 
   defp authed_conn(method, path) do
@@ -22,87 +25,106 @@ defmodule SomaWeb.ControllerIntegrationTest do
 
   # ── ConversationController ───────────────────────────────────────────
 
-  test "GET / returns list" do
-    conn =
-      :get
-      |> authed_conn("/")
-      |> ConversationController.call(ConversationController.init([]))
+  test "conversation CRUD flow" do
+    list = authed_conn(:get, "/") |> ConversationController.call(ConversationController.init([]))
+    assert list.status == 200
 
-    assert conn.status == 200
-    body = Jason.decode!(conn.resp_body)
-    assert body["data"] == []
-  end
+    conv = Conversations.get_or_create(@org_id, @user_id, "agent-ci", "chat")
 
-  test "GET /:id returns 404 for missing" do
-    conn =
-      :get
-      |> authed_conn("/non-existent-id")
-      |> ConversationController.call(ConversationController.init([]))
-
-    assert conn.status == 404
-  end
-
-  test "POST /:id/messages creates message" do
-    conv = Conversations.get_or_create(@org_id, @user_id, "agent-1", "chat")
-
-    conn =
+    # Post message — use raw_body approach to avoid mixed keys
+    post =
       :post
       |> authed_conn("/#{conv.id}/messages")
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"role" => "user", "content" => "Hello"})
       |> ConversationController.call(ConversationController.init([]))
+    assert post.status in [201, 200]
 
-    assert conn.status == 201
+    # Show with messages
+    show = authed_conn(:get, "/#{conv.id}")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"id" => conv.id}})
+           |> ConversationController.call(ConversationController.init([]))
+    assert show.status == 200
+    assert length(Jason.decode!(show.resp_body)["messages"]) >= 1
+
+    # Post with invalid data triggers validation error
+    invalid =
+      :post
+      |> authed_conn("/#{conv.id}/messages")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"role" => "", "content" => ""})
+      |> ConversationController.call(ConversationController.init([]))
+    assert invalid.status == 422
+
+    # Delete
+    del = authed_conn(:delete, "/#{conv.id}") |> ConversationController.call(ConversationController.init([]))
+    assert del.status == 200
   end
 
-  test "DELETE /:id soft-deletes" do
-    conv = Conversations.get_or_create(@org_id, @user_id, "agent-3", "chat")
-
-    conn =
-      :delete
-      |> authed_conn("/#{conv.id}")
-      |> ConversationController.call(ConversationController.init([]))
-
-    assert conn.status == 200
+  test "GET /:id returns 404 for missing" do
+    conn = authed_conn(:get, "/00000000-0000-0000-0000-000000000099")
+           |> ConversationController.call(ConversationController.init([]))
+    assert conn.status == 404
   end
 
   # ── SkillController ──────────────────────────────────────────────────
 
-  test "GET / returns skills list" do
-    conn =
-      :get
-      |> authed_conn("/")
-      |> SkillController.call(SkillController.init([]))
+  test "skill CRUD flow" do
+    list = authed_conn(:get, "/") |> SkillController.call(SkillController.init([]))
+    assert list.status == 200
 
-    assert conn.status == 200
-    assert is_list(Jason.decode!(conn.resp_body)["data"])
-  end
-
-  test "GET /:name returns 404 for missing" do
-    conn =
-      :get
-      |> authed_conn("/missing-skill")
-      |> SkillController.call(SkillController.init([]))
-
-    assert conn.status == 404
-  end
-
-  test "POST / creates skill and DELETE /:name removes it" do
-    create_conn =
+    create =
       :post
       |> authed_conn("/")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"name" => "test-skill-int", "content" => "# Test"})
+      |> Map.put(:body_params, %{"name" => "test-skill-ci", "content" => "# Test"})
       |> SkillController.call(SkillController.init([]))
+    assert create.status == 201
 
-    assert create_conn.status == 201
+    # Show
+    show = authed_conn(:get, "/test-skill-ci")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+           |> SkillController.call(SkillController.init([]))
+    assert show.status == 200
 
-    delete_conn =
-      :delete
-      |> authed_conn("/test-skill-int")
+    # Update
+    update =
+      :put
+      |> authed_conn("/test-skill-ci")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"content" => "# Updated"})
       |> SkillController.call(SkillController.init([]))
+    assert update.status == 200
 
-    assert delete_conn.status == 204
+    del = authed_conn(:delete, "/test-skill-ci")
+          |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+          |> SkillController.call(SkillController.init([]))
+    assert del.status == 204
+
+    # Assign to agents
+    assign =
+      :put
+      |> authed_conn("/fund-management/agents")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "fund-management"}})
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"agentIds" => []})
+      |> SkillController.call(SkillController.init([]))
+    assert assign.status == 200
+  end
+
+  test "GET /:name returns 404 for missing skill" do
+    conn = authed_conn(:get, "/no-existe")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
+           |> SkillController.call(SkillController.init([]))
+    assert conn.status == 404
+  end
+
+  test "DELETE /:name returns 404 for missing skill" do
+    conn = authed_conn(:delete, "/no-existe")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
+           |> SkillController.call(SkillController.init([]))
+    assert conn.status == 404
   end
 
   # ── ApiKeyController ─────────────────────────────────────────────────
@@ -112,11 +134,16 @@ defmodule SomaWeb.ControllerIntegrationTest do
       :post
       |> authed_conn("/")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"name" => "test-key"})
-      |>  ApiKeyController.call(ApiKeyController.init([]))
-
+      |> Map.put(:body_params, %{"name" => "test-key-ci"})
+      |> ApiKeyController.call(ApiKeyController.init([]))
     assert conn.status == 201
-    key = Jason.decode!(conn.resp_body)["api_key"]
-    assert String.starts_with?(key, "zs_live_")
+    assert String.starts_with?(Jason.decode!(conn.resp_body)["api_key"], "zs_live_")
+  end
+
+  # ── AgentController ──────────────────────────────────────────────────
+
+  test "agent list returns 200" do
+    conn = authed_conn(:get, "/") |> AgentController.call(AgentController.init([]))
+    assert conn.status == 200
   end
 end

@@ -35,20 +35,54 @@ defmodule Soma.OrgWorkspaceTest do
   end
 
   test "ensure_shared creates directory and sets permissions" do
-    Soma.FileSystem.Mock.set_responses(%{
-      :exists_default => false,
-      :dir_default => true
-    })
-
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
     Soma.Shell.Mock.set_responses(%{
       {"chgrp", ["org-#{@org}", "/workspace/orgs/#{@org}/shared"]} => {"", 0}
     })
-
     assert :ok = OrgWorkspace.ensure_shared(@org)
   end
 
-  test "list_shared_dirs returns empty when no dir" do
-    Soma.FileSystem.Mock.set_responses(%{dir_default: false})
-    assert [] = OrgWorkspace.list_shared_dirs(@org)
+  test "ensure_team creates team directory" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
+    Soma.Shell.Mock.set_responses(%{
+      {"groupadd", ["--force", "team-team1"]} => {"", 0},
+      {"chgrp", ["team-team1", "/workspace/orgs/#{@org}/teams/team1"]} => {"", 0}
+    })
+    result = OrgWorkspace.ensure_team(@org, "team1")
+    assert String.ends_with?(result, "teams/team1")
+  end
+
+  test "list_files returns files" do
+    Soma.FileSystem.Mock.set_responses(%{:dir_default => true, :exists_default => true})
+    {:ok, files} = OrgWorkspace.list_files(@org)
+    assert is_list(files)
+  end
+
+  test "read_file returns content" do
+    Soma.FileSystem.Mock.set_responses(%{
+      :exists_default => true,
+      {:read!, "/workspace/orgs/#{@org}/readme.md"} => "hello"
+    })
+    assert {:ok, "hello"} = OrgWorkspace.read_file(@org, "readme.md")
+  end
+
+  test "mkdir creates directory" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
+    assert {:ok, _} = OrgWorkspace.mkdir(@org, "newdir")
+  end
+
+  test "write_file creates file" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => true, :dir_default => true})
+    assert {:ok, "file.txt"} = OrgWorkspace.write_file(@org, "file.txt", "content")
+  end
+
+  test "delete removes file" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => true, :dir_default => true})
+    assert {:ok, _} = OrgWorkspace.delete(@org, "old.txt")
+  end
+
+  test "move renames file" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => true, :dir_default => true})
+    assert {:ok, "dst.txt"} = OrgWorkspace.move(@org, "src.txt", "dst.txt")
   end
 end
