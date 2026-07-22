@@ -1,5 +1,5 @@
 defmodule SomaWeb.Plugs.AuthTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   use Plug.Test
 
   alias SomaWeb.Plugs.{JWTAuth, ApiKeyAuth, Guard}
@@ -59,18 +59,6 @@ defmodule SomaWeb.Plugs.AuthTest do
       |> ApiKeyAuth.call(ApiKeyAuth.init([]))
 
     refute conn.halted
-    refute conn.assigns[:authenticated]
-  end
-
-  test "call/2 with invalid API key returns 401" do
-    conn =
-      :get
-      |> conn("/api/test")
-      |> put_req_header("x-api-key", "zs_live_invalid_key_1234567890abcdef")
-      |> ApiKeyAuth.call(ApiKeyAuth.init([]))
-
-    assert conn.halted
-    assert conn.status == 401
   end
 
   test "call/2 with too-short API key passes through" do

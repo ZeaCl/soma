@@ -1,5 +1,5 @@
 defmodule Soma.AgentRunnerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Soma.AgentRunner
 
