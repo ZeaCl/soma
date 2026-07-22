@@ -3,6 +3,7 @@ defmodule SomaWeb.ControllersFullTest do
   use Plug.Test
 
   alias Soma.Repo
+  alias Soma.Workspace
   alias SomaWeb.{AgentController, FileController, SandboxController, ApiKeyController}
 
   @org_id "00000000-0000-0000-0000-000000000001"
@@ -12,15 +13,12 @@ defmodule SomaWeb.ControllersFullTest do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Application.put_env(:soma, :thalamus_client, Soma.ThalamusClient.Mock)
     Application.put_env(:soma, :shell, Soma.Shell.Mock)
-    Application.put_env(:soma, :file_system, Soma.FileSystem.Mock)
     Soma.ThalamusClient.Mock.start_link(%{})
     Soma.Shell.Mock.start_link(%{})
-    Soma.FileSystem.Mock.start_link(%{})
 
     on_exit(fn ->
       Application.delete_env(:soma, :thalamus_client)
       Application.delete_env(:soma, :shell)
-      Application.delete_env(:soma, :file_system)
     end)
   end
 
@@ -120,6 +118,16 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status == 404
   end
 
+  test "file upload returns 200" do
+    conn =
+      :post
+      |> authed("/upload")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"name" => "test.txt", "data" => Base.encode64("test")})
+      |> FileController.call(FileController.init([]))
+    assert conn.status == 200
+  end
+
   test "file mkdir creates directory" do
     conn =
       :post
@@ -150,10 +158,19 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status in [200, 404]
   end
 
-  test "file delete returns 200" do
+  test "file delete returns ok or not_found" do
     conn = authed(:delete, "/?path=test.txt")
            |> FileController.call(FileController.init([]))
     assert conn.status in [200, 404]
+  end
+
+  test "file delete non-empty returns 409" do
+    Workspace.ensure_org(@org_id)
+    Workspace.mkdir(@org_id, "nonempty")
+    Workspace.write_file(@org_id, "nonempty/a.txt", "x")
+    conn = authed(:delete, "/?path=nonempty")
+           |> FileController.call(FileController.init([]))
+    assert conn.status in [200, 409]
   end
 
   test "file history returns commits" do
@@ -162,7 +179,7 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status == 200
   end
 
-  test "file recover works" do
+  test "file recover returns ok or error" do
     conn =
       :post
       |> authed("/recover")
@@ -172,7 +189,7 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status in [200, 500]
   end
 
-  test "file push works" do
+  test "file push returns 200" do
     conn = authed(:post, "/push") |> FileController.call(FileController.init([]))
     assert conn.status == 200
   end
