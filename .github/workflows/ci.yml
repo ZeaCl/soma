@@ -53,6 +53,13 @@ jobs:
       - name: Format check
         run: mix format --check-formatted
 
+      - name: Credo (static analysis)
+        run: mix credo --strict
+
+      - name: Sobelow (security scan)
+        run: mix sobelow --config
+        continue-on-error: true
+
       - name: Run tests with coverage
         run: mix coveralls.json
         env:

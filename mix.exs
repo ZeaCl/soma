@@ -14,12 +14,13 @@ defmodule Soma.MixProject do
       aliases: aliases(),
       deps: deps(),
       test_coverage: [tool: ExCoveralls, summary: [threshold: 0]],
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.json": :test,
-        "coveralls.html": :test
-      ]
+      aliases: aliases(),
+      deps: deps()
     ]
+  end
+
+  def cli do
+    [preferred_envs: [coveralls: :test, "coveralls.json": :test, "coveralls.html": :test]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -42,7 +43,9 @@ defmodule Soma.MixProject do
       {:ecto_sql, "~> 3.12"},
       {:postgrex, "~> 0.19"},
       {:corsica, "~> 2.1"},
-      {:excoveralls, "~> 0.18", only: :test}
+      {:excoveralls, "~> 0.18", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false}
     ]
   end
 
