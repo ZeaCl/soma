@@ -223,14 +223,61 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status == 200
   end
 
+  test "sandbox create user returns 201" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-user-useradd", ["user-test-1", @org_id, ""]} => {"", 0},
+      {"id", ["-u", "user-user-test-1"]} => {"1001\n", 0}
+    })
+    conn = authed(:get, "/create?type=user&user_id=user-test-1&org_id=#{@org_id}")
+           |> SandboxController.call(SandboxController.init([]))
+    assert conn.status == 201
+  end
+
+  test "sandbox create agent returns 201" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-useradd", ["agent-001", @org_id, "", "[]"]} => {"", 0},
+      {"id", ["-u", "soma-agent-001"]} => {"1002\n", 0}
+    })
+    conn = authed(:get, "/create?type=agent&user_id=agent-001&org_id=#{@org_id}")
+           |> SandboxController.call(SandboxController.init([]))
+    assert conn.status == 201
+  end
+
   test "sandbox unified files returns 200" do
     conn = authed(:get, "/?owner_type=user&owner_id=test")
            |> SandboxController.call(SandboxController.init([]))
     assert conn.status == 200
   end
 
-  test "sandbox delete returns 200" do
-    conn = authed(:delete, "/test-id?type=agent")
+  test "sandbox unified upload returns 200" do
+    conn =
+      :post
+      |> authed("/upload")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{
+        "owner_type" => "user",
+        "owner_id" => "user-test-1",
+        "name" => "test.txt",
+        "data" => Base.encode64("hello")
+      })
+      |> SandboxController.call(SandboxController.init([]))
+    assert conn.status == 200
+  end
+
+  test "sandbox delete user returns 200" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-user-userdel", ["user-del-1"]} => {"", 0}
+    })
+    conn = authed(:delete, "/user-del-1?type=user")
+           |> SandboxController.call(SandboxController.init([]))
+    assert conn.status == 200
+  end
+
+  test "sandbox delete agent returns 200" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-userdel", ["agent-del-1"]} => {"", 0}
+    })
+    conn = authed(:delete, "/agent-del-1?type=agent")
            |> SandboxController.call(SandboxController.init([]))
     assert conn.status == 200
   end
