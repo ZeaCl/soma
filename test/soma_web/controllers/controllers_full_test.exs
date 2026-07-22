@@ -38,29 +38,71 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status == 200
   end
 
-  test "agent show returns 404 for missing UUID" do
+  test "agent create returns 201" do
+    Soma.ThalamusClient.Mock.set_responses(%{
+      {:create_user, "agent@test.com"} => {:ok, %{"id" => "a0000000-0000-0000-0000-000000000001", "agent_config" => %{}}}
+    })
+
+    conn =
+      :post
+      |> authed("/")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{
+        "name" => "Test Agent",
+        "email" => "agent@test.com",
+        "engine" => "pi",
+        "skills" => ["xlsx"],
+        "system_prompt" => "You are helpful"
+      })
+      |> AgentController.call(AgentController.init([]))
+    assert conn.status == 201
+  end
+
+  test "agent show returns 404 for missing" do
     conn = authed(:get, "/00000000-0000-0000-0000-000000000099")
            |> AgentController.call(AgentController.init([]))
     assert conn.status == 404
   end
 
-  test "agent config updates config" do
+  test "agent config updates" do
+    Soma.ThalamusClient.Mock.set_responses(%{
+      {:update_user, "00000000-0000-0000-0000-000000000099"} => {:ok, %{"system_prompt" => "test"}}
+    })
     conn =
       :put
       |> authed("/00000000-0000-0000-0000-000000000099/config")
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"system_prompt" => "test"})
       |> AgentController.call(AgentController.init([]))
-    assert conn.status in [200, 500]
+    assert conn.status == 200
   end
 
-  test "agent shares returns empty" do
+  test "agent delete returns 200" do
+    Soma.ThalamusClient.Mock.set_responses(%{
+      {:delete_user, "00000000-0000-0000-0000-000000000099"} => :ok
+    })
+    conn = authed(:delete, "/00000000-0000-0000-0000-000000000099")
+           |> AgentController.call(AgentController.init([]))
+    assert conn.status == 200
+  end
+
+  test "agent share returns 200" do
+    conn =
+      :post
+      |> authed("/00000000-0000-0000-0000-000000000099/share")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"shared_with_user_id" => "user-2"})
+      |> AgentController.call(AgentController.init([]))
+    assert conn.status == 200
+  end
+
+  test "agent shares list returns 200" do
     conn = authed(:get, "/00000000-0000-0000-0000-000000000099/shares")
            |> AgentController.call(AgentController.init([]))
     assert conn.status == 200
   end
 
-  test "shared agents list returns 200" do
+  test "shared agents returns 200" do
     conn = authed(:get, "/shared") |> AgentController.call(AgentController.init([]))
     assert conn.status == 200
   end
