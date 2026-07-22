@@ -53,11 +53,21 @@ jobs:
       - name: Format check
         run: mix format --check-formatted
 
-      - name: Run tests
-        run: mix test
+      - name: Run tests with coverage
+        run: mix coveralls.json --threshold 0
         env:
           DATABASE_URL: ecto://postgres:postgres@localhost:5432/soma_test
           MIX_ENV: test
+
+      - name: Check coverage threshold
+        run: |
+          COV=$(python3 -c "import json; d=json.load(open('cover/excoveralls.json')); print(f\"{d['covered']/max(d['total'],1)*100:.1f}\")")
+          echo "Coverage: ${COV}%"
+          if [ "$(echo "$COV < 50" | bc)" -eq 1 ]; then
+            echo "❌ Coverage ${COV}% < 50% threshold"
+            exit 1
+          fi
+          echo "✅ Coverage ${COV}% >= 50%"
 
   # ── CLI: syntax check + install + coverage ─────────────────────────────
   cli:

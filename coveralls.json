@@ -1,0 +1,13 @@
+# ExCoveralls configuration
+# See: https://github.com/parroty/excoveralls
+
+{
+  "coverage_options": {
+    "treat_no_relevant_lines_as_covered": true,
+    "minimum_coverage": 0
+  },
+  "skip_files": [
+    "test/",
+    "deps/"
+  ]
+}

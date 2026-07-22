@@ -11,7 +11,13 @@ defmodule Soma.MixProject do
         soma: [include_executables_for: [:unix], applications: [runtime_tools: :permanent]]
       ],
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls, summary: [threshold: 0]],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.json": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -31,7 +37,8 @@ defmodule Soma.MixProject do
       {:req, "~> 0.5"},
       {:ecto_sql, "~> 3.12"},
       {:postgrex, "~> 0.19"},
-      {:corsica, "~> 2.1"}
+      {:corsica, "~> 2.1"},
+      {:excoveralls, "~> 0.18", only: :test}
     ]
   end
 
@@ -40,7 +47,7 @@ defmodule Soma.MixProject do
       precommit: [
         "format --check-formatted",
         "compile --warnings-as-errors",
-        "test",
+        "coveralls.json",
         "cmd ./doctor-soma.sh"
       ]
     ]
