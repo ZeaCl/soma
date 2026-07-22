@@ -35,53 +35,39 @@ defmodule Soma.OrgWorkspaceTest do
   end
 
   test "ensure_shared creates directory and sets permissions" do
-    Soma.FileSystem.Mock.set_responses(%{
-      :exists_default => false,
-      :dir_default => true
-    })
-
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
     Soma.Shell.Mock.set_responses(%{
       {"chgrp", ["org-#{@org}", "/workspace/orgs/#{@org}/shared"]} => {"", 0}
     })
-
     assert :ok = OrgWorkspace.ensure_shared(@org)
   end
 
-  test "list_shared_dirs returns empty when no dir" do
-    Soma.FileSystem.Mock.set_responses(%{
-      :dir_default => false,
-      :exists_default => false
-    })
-    result = OrgWorkspace.list_shared_dirs(@org)
-    assert is_list(result)
-  end
-
-  test "ensure_team_shared creates directory and sets permissions" do
-    Soma.FileSystem.Mock.set_responses(%{
-      :exists_default => false,
-      :dir_default => true
-    })
-
-    team_dir = OrgWorkspace.team_dir(@org, "team1")
-    assert String.ends_with?(team_dir, "teams/team1")
-  end
-
-  test "resolve validates team paths" do
-    assert {:ok, path} = OrgWorkspace.resolve(@org, "teams/t1/file.txt")
-    assert String.ends_with?(path, "teams/t1/file.txt")
-  end
-
-  test "ensure_team_shared creates team directory" do
+  test "ensure_team creates team directory" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
     Soma.Shell.Mock.set_responses(%{
       {"groupadd", ["--force", "team-team1"]} => {"", 0},
       {"chgrp", ["team-team1", "/workspace/orgs/#{@org}/teams/team1"]} => {"", 0}
     })
-    Soma.FileSystem.Mock.set_responses(%{
-      :exists_default => false,
-      :dir_default => true
-    })
-
-    result = OrgWorkspace.ensure_team_shared(@org, "team1")
+    result = OrgWorkspace.ensure_team(@org, "team1")
     assert String.ends_with?(result, "teams/team1")
+  end
+
+  test "list_files returns files" do
+    Soma.FileSystem.Mock.set_responses(%{:dir_default => true, :exists_default => true})
+    {:ok, files} = OrgWorkspace.list_files(@org)
+    assert is_list(files)
+  end
+
+  test "read_file returns content" do
+    Soma.FileSystem.Mock.set_responses(%{
+      :exists_default => true,
+      {:read!, "/workspace/orgs/#{@org}/readme.md"} => "hello"
+    })
+    assert {:ok, "hello"} = OrgWorkspace.read_file(@org, "readme.md")
+  end
+
+  test "mkdir creates directory" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
+    assert {:ok, _} = OrgWorkspace.mkdir(@org, "newdir")
   end
 end
