@@ -8,7 +8,7 @@ defmodule SomaWeb.SandboxController do
   plug(:match)
   plug(:dispatch)
 
-  get "/sandboxes" do
+  get "/" do
     org_id = conn.assigns[:org_id]
     owner_type = conn.params["owner_type"] || "agent"
     owner_id = conn.params["owner_id"]
@@ -23,11 +23,11 @@ defmodule SomaWeb.SandboxController do
     end
   end
 
-  get "/sandboxes/create" do
+  get "/create" do
     do_create_sandbox(conn, conn.params)
   end
 
-  delete "/sandboxes/:id" do
+  delete "/:id" do
     type = conn.params["type"] || "user"
 
     case type do
@@ -48,7 +48,7 @@ defmodule SomaWeb.SandboxController do
     end
   end
 
-  get "/files/unified" do
+  get "/" do
     org_id = conn.assigns[:org_id]
     owner_type = conn.params["owner_type"] || "agent"
     owner_id = conn.params["owner_id"]
@@ -60,7 +60,7 @@ defmodule SomaWeb.SandboxController do
     end
   end
 
-  post "/files/unified/upload" do
+  post "/upload" do
     org_id = conn.assigns[:org_id]
     attrs = conn.body_params
     owner_type = attrs["owner_type"] || "user"

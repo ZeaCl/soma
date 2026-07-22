@@ -8,12 +8,12 @@ defmodule SomaWeb.SkillController do
   plug(:match)
   plug(:dispatch)
 
-  get "/skills" do
+  get "/" do
     skills = Skills.list(conn.assigns[:org_id])
     json(conn, 200, %{data: skills, total: length(skills)})
   end
 
-  get "/skills/:name" do
+  get "/:name" do
     case Skills.get(conn.assigns[:org_id], name) do
       {:ok, content, source} ->
         json(conn, 200, %{name: name, content: content, source: source})
@@ -23,7 +23,7 @@ defmodule SomaWeb.SkillController do
     end
   end
 
-  post "/skills" do
+  post "/" do
     org_id = conn.assigns[:org_id]
     attrs = conn.body_params
 
@@ -35,7 +35,7 @@ defmodule SomaWeb.SkillController do
     end
   end
 
-  put "/skills/:name" do
+  put "/:name" do
     org_id = conn.assigns[:org_id]
     attrs = conn.body_params
 
@@ -47,7 +47,7 @@ defmodule SomaWeb.SkillController do
     end
   end
 
-  delete "/skills/:name" do
+  delete "/:name" do
     org_id = conn.assigns[:org_id]
 
     case Skills.delete(org_id, name) do
@@ -56,7 +56,7 @@ defmodule SomaWeb.SkillController do
     end
   end
 
-  put "/skills/:name/agents" do
+  put "/:name/agents" do
     attrs = conn.body_params
 
     case Skills.assign_to_agents(conn.assigns[:org_id], name, attrs["agentIds"]) do

@@ -8,7 +8,7 @@ defmodule SomaWeb.AgentController do
   plug(:match)
   plug(:dispatch)
 
-  get "/agents" do
+  get "/" do
     token = get_token(conn)
 
     case Skills.list_agents(token) do
@@ -16,7 +16,7 @@ defmodule SomaWeb.AgentController do
     end
   end
 
-  post "/agents" do
+  post "/" do
     org_id = conn.assigns[:org_id]
     attrs = conn.body_params
     token = get_token(conn)
@@ -76,14 +76,14 @@ defmodule SomaWeb.AgentController do
     end
   end
 
-  get "/agents/:id" do
+  get "/:id" do
     case Skills.get_agent(id) do
       {:ok, agent} -> json(conn, 200, %{data: agent})
       {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
     end
   end
 
-  get "/agents/:id/skills" do
+  get "/:id/skills" do
     case Skills.get_agent(id) do
       {:ok, agent} ->
         config = agent["agent_config"] || %{}
@@ -104,7 +104,7 @@ defmodule SomaWeb.AgentController do
     end
   end
 
-  put "/agents/:id/config" do
+  put "/:id/config" do
     attrs = conn.body_params
 
     case Skills.update_agent_config(id, attrs) do
@@ -113,14 +113,14 @@ defmodule SomaWeb.AgentController do
     end
   end
 
-  delete "/agents/:id" do
+  delete "/:id" do
     case Skills.delete_agent(id) do
       {:ok, _} -> json(conn, 200, %{ok: true})
       {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
     end
   end
 
-  post "/agents/:id/share" do
+  post "/:id/share" do
     user_id = conn.assigns[:user_id] || conn.body_params["user_id"]
     shared_with = conn.body_params["shared_with_user_id"]
 
@@ -132,19 +132,19 @@ defmodule SomaWeb.AgentController do
     end
   end
 
-  delete "/agents/:id/share/:user_id" do
+  delete "/:id/share/:user_id" do
     case AgentShares.unshare(id, user_id) do
       {:ok, _} -> json(conn, 200, %{ok: true})
       {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
     end
   end
 
-  get "/agents/:id/shares" do
+  get "/:id/shares" do
     shares = AgentShares.list_shares_for_agent(id)
     json(conn, 200, %{data: shares})
   end
 
-  get "/agent-shares" do
+  get "/shared" do
     user_id = conn.assigns[:user_id] || "system"
     shares = AgentShares.list_shared_with(user_id)
     json(conn, 200, %{data: shares})

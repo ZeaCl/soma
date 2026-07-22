@@ -43,6 +43,7 @@ defmodule SomaWeb.Plugs.AuthRouter do
   forward("/agents/:id/share/:user_id", to: SomaWeb.AgentController)
   forward("/agents/:id/shares", to: SomaWeb.AgentController)
   forward("/agent-shares", to: SomaWeb.AgentController)
+  forward("/agents/shared", to: SomaWeb.AgentController)
 
   # ── Sandboxes ──
   forward("/sandboxes", to: SomaWeb.SandboxController)
