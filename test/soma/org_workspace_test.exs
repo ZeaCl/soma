@@ -55,4 +55,33 @@ defmodule Soma.OrgWorkspaceTest do
     result = OrgWorkspace.list_shared_dirs(@org)
     assert is_list(result)
   end
+
+  test "ensure_team_shared creates directory and sets permissions" do
+    Soma.FileSystem.Mock.set_responses(%{
+      :exists_default => false,
+      :dir_default => true
+    })
+
+    team_dir = OrgWorkspace.team_dir(@org, "team1")
+    assert String.ends_with?(team_dir, "teams/team1")
+  end
+
+  test "resolve validates team paths" do
+    assert {:ok, path} = OrgWorkspace.resolve(@org, "teams/t1/file.txt")
+    assert String.ends_with?(path, "teams/t1/file.txt")
+  end
+
+  test "ensure_team_shared creates team directory" do
+    Soma.Shell.Mock.set_responses(%{
+      {"groupadd", ["--force", "team-team1"]} => {"", 0},
+      {"chgrp", ["team-team1", "/workspace/orgs/#{@org}/teams/team1"]} => {"", 0}
+    })
+    Soma.FileSystem.Mock.set_responses(%{
+      :exists_default => false,
+      :dir_default => true
+    })
+
+    result = OrgWorkspace.ensure_team_shared(@org, "team1")
+    assert String.ends_with?(result, "teams/team1")
+  end
 end
