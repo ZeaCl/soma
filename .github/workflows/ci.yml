@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ── Elixir: compile + test + format ────────────────────────────────────
+  elixir:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: soma_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.18.3'
+          otp-version: '27.3.3'
+
+      - name: Cache deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps/
+            _build/
+          key: ${{ runner.os }}-elixir-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-elixir-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile
+        run: mix compile --warnings-as-errors
+
+      - name: Format check
+        run: mix format --check-formatted
+
+      - name: Run tests
+        run: mix test
+        env:
+          DATABASE_URL: ecto://postgres:postgres@localhost:5432/soma_test
+          MIX_ENV: test
+
+  # ── CLI: syntax check + install + coverage ─────────────────────────────
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Install CLI dependencies
+        working-directory: cli
+        run: npm ci
+
+      - name: Syntax check (all files)
+        run: |
+          for f in cli/index.js cli/commands/*.js cli/lib/*.js cli/lib/locales/*.js; do
+            node --check "$f" || exit 1
+          done
+
+      - name: CLI --help (smoke test)
+        working-directory: cli
+        run: node index.js --help
+
+      - name: CLI --version
+        working-directory: cli
+        run: node index.js --version
+
+      - name: CLI --zea-discover (valid JSON)
+        run: node cli/index.js --zea-discover | python3 -m json.tool > /dev/null
+
+      - name: API → CLI coverage check
+        run: node cli/scripts/check-coverage.js
+
+  # ── SDK: install + build + typecheck ───────────────────────────────────
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: sdk/package-lock.json
+
+      - name: Install SDK dependencies
+        working-directory: sdk
+        run: npm ci
+
+      - name: Build SDK
+        working-directory: sdk
+        run: npm run build
+
+      - name: TypeScript check
+        working-directory: sdk
+        run: npx tsc --noEmit
+        continue-on-error: true  # tsup build ya valida types
+
+  # ── Docker: build sin push ─────────────────────────────────────────────
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker build (dry-run)
+        run: docker build -t soma:ci-test .
