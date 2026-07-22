@@ -17,11 +17,15 @@ defmodule Soma.ThalamusClient.Mock do
   @impl true
   def get_user(token), do: get({:get_user, token}, {:ok, []})
   @impl true
-  def create_user(attrs, token), do: get({:create_user, attrs["email"]}, {:ok, %{"id" => "mock-id"}})
+  def create_user(attrs, token),
+    do: get({:create_user, attrs["email"]}, {:ok, %{"id" => "mock-id"}})
+
   @impl true
   def update_user(id, config, token), do: get({:update_user, id}, {:ok, config})
   @impl true
-  def get_user_by_id(id), do: get({:get_user_by_id, id}, {:ok, %{"id" => id, "name" => "Mock Agent"}})
+  def get_user_by_id(id),
+    do: get({:get_user_by_id, id}, {:ok, %{"id" => id, "name" => "Mock Agent"}})
+
   @impl true
   def delete_user(id), do: get({:delete_user, id}, :ok)
   @impl true

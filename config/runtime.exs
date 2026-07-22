@@ -23,7 +23,6 @@ config :soma, :thalamus,
 
 config :soma, :agent_host, System.get_env("AGENT_HOST", "http://zea-agent:3001")
 
-
 # JSON log format for Loki/Promtail ingestion
 config :logger, :console,
   format: {Soma.LogFormatter, :format},

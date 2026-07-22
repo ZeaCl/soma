@@ -32,7 +32,13 @@ defmodule SomaWeb.AgentSocketTest do
 
   test "handle_in with prompt when not initialized returns error" do
     state = %{agent_runner: nil}
-    result = AgentSocket.handle_in({Jason.encode!(%{type: "prompt", text: "hi"}), [opcode: :text]}, state)
+
+    result =
+      AgentSocket.handle_in(
+        {Jason.encode!(%{type: "prompt", text: "hi"}), [opcode: :text]},
+        state
+      )
+
     assert {:push, {:text, json}, _state} = result
     assert Jason.decode!(json)["type"] == "error"
   end

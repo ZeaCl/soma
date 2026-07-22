@@ -14,6 +14,7 @@ defmodule SomaWeb.TracingPlug do
         "http.method": conn.method,
         "http.url": conn.request_path
       })
+
       conn
     end
   end

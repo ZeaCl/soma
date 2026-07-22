@@ -100,7 +100,10 @@ defmodule Soma.AgentMetrics do
   def manual_metrics(_opts), do: []
 
   def session_started(agent_id, engine) do
-    :telemetry.execute([:soma, :agent, :session, :start], %{}, %{agent_id: agent_id, engine: engine})
+    :telemetry.execute([:soma, :agent, :session, :start], %{}, %{
+      agent_id: agent_id,
+      engine: engine
+    })
   end
 
   def request_sent(agent_id) do
@@ -108,7 +111,10 @@ defmodule Soma.AgentMetrics do
   end
 
   def response_duration(agent_id, engine, duration_ms) do
-    :telemetry.execute([:soma, :agent, :response], %{duration: duration_ms}, %{agent_id: agent_id, engine: engine})
+    :telemetry.execute([:soma, :agent, :response], %{duration: duration_ms}, %{
+      agent_id: agent_id,
+      engine: engine
+    })
   end
 
   def error_occurred(agent_id, error_type) do

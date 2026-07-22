@@ -50,8 +50,7 @@ defmodule Soma.SandboxTest do
   test "create con teams y mounts pasa args correctos" do
     Soma.Shell.Mock.set_responses(%{
       {"/usr/local/bin/soma-agent-useradd",
-       [@agent, @org, "finanzas", ~s([{"source":"/tmp","dest":"shared"}])]} =>
-        {"", 0},
+       [@agent, @org, "finanzas", ~s([{"source":"/tmp","dest":"shared"}])]} => {"", 0},
       {"id", ["-u", "soma-00000000-000"]} => {"1001\n", 0}
     })
 
@@ -64,8 +63,7 @@ defmodule Soma.SandboxTest do
 
   test "create falla cuando script devuelve error" do
     Soma.Shell.Mock.set_responses(%{
-      {"/usr/local/bin/soma-agent-useradd", [@agent, @org, "", "[]"]} =>
-        {"Permission denied", 1}
+      {"/usr/local/bin/soma-agent-useradd", [@agent, @org, "", "[]"]} => {"Permission denied", 1}
     })
 
     assert {:error, reason} = Sandbox.create(@agent, @org)

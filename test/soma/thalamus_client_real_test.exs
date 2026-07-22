@@ -9,6 +9,7 @@ defmodule Soma.ThalamusClientRealTest do
       url: "http://127.0.0.1:19999",
       jwks_url: "http://127.0.0.1:19999/.well-known/jwks.json"
     )
+
     on_exit(fn ->
       Application.put_env(:soma, :thalamus,
         url: "http://thalamus:4000",

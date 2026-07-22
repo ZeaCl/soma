@@ -21,10 +21,12 @@ defmodule Soma.Workspace do
 
   def ensure_org(org_id) do
     base = org_path(org_id)
+
     unless fs().exists?(base) do
       fs().mkdir_p(base)
       init_git(base)
     end
+
     :ok
   end
 

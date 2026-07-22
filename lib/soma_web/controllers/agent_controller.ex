@@ -45,15 +45,19 @@ defmodule SomaWeb.AgentController do
 
               File.write!(
                 Path.join(cfg_dir, "config.json"),
-                Jason.encode!(%{
-                  "skills" => skill_names,
-                  "system_prompt" => config["system_prompt"],
-                  "engine" => config["engine"] || "pi",
-                  "created_at" => DateTime.to_iso8601(DateTime.utc_now())
-                }, pretty: true)
+                Jason.encode!(
+                  %{
+                    "skills" => skill_names,
+                    "system_prompt" => config["system_prompt"],
+                    "engine" => config["engine"] || "pi",
+                    "created_at" => DateTime.to_iso8601(DateTime.utc_now())
+                  },
+                  pretty: true
+                )
               )
 
               host_auth_dir = Path.join([System.get_env("HOME") || "/root", ".pi", "agent"])
+
               for file <- ["auth.json", "settings.json"] do
                 src = Path.join(host_auth_dir, file)
                 dst = Path.join(cfg_dir, file)
@@ -125,7 +129,9 @@ defmodule SomaWeb.AgentController do
     shared_with = conn.body_params["shared_with_user_id"]
 
     case AgentShares.share(id, shared_with, user_id) do
-      {:ok, _} -> json(conn, 200, %{ok: true})
+      {:ok, _} ->
+        json(conn, 200, %{ok: true})
+
       {:error, cs} ->
         errors = Ecto.Changeset.traverse_errors(cs, fn {msg, _} -> msg end)
         json(conn, 422, %{error: "validation_failed", details: errors})
@@ -150,5 +156,5 @@ defmodule SomaWeb.AgentController do
     json(conn, 200, %{data: shares})
   end
 
-  match _, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+  match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
 end

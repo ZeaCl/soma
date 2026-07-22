@@ -36,18 +36,22 @@ defmodule Soma.OrgWorkspaceTest do
 
   test "ensure_shared creates directory and sets permissions" do
     Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
+
     Soma.Shell.Mock.set_responses(%{
       {"chgrp", ["org-#{@org}", "/workspace/orgs/#{@org}/shared"]} => {"", 0}
     })
+
     assert :ok = OrgWorkspace.ensure_shared(@org)
   end
 
   test "ensure_team creates team directory" do
     Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
+
     Soma.Shell.Mock.set_responses(%{
       {"groupadd", ["--force", "team-team1"]} => {"", 0},
       {"chgrp", ["team-team1", "/workspace/orgs/#{@org}/teams/team1"]} => {"", 0}
     })
+
     result = OrgWorkspace.ensure_team(@org, "team1")
     assert String.ends_with?(result, "teams/team1")
   end
@@ -63,6 +67,7 @@ defmodule Soma.OrgWorkspaceTest do
       :exists_default => true,
       {:read!, "/workspace/orgs/#{@org}/readme.md"} => "hello"
     })
+
     assert {:ok, "hello"} = OrgWorkspace.read_file(@org, "readme.md")
   end
 

@@ -19,7 +19,9 @@ defmodule SomaWeb.ConversationController do
     org_id = conn.assigns[:org_id]
 
     case Conversations.get(org_id, id) do
-      nil -> json(conn, 404, %{error: "not_found"})
+      nil ->
+        json(conn, 404, %{error: "not_found"})
+
       conv ->
         messages = Conversations.list_messages(id)
         json(conn, 200, %{id: conv.id, title: conv.title, messages: messages})
@@ -30,7 +32,9 @@ defmodule SomaWeb.ConversationController do
     attrs = conn.body_params
 
     case Conversations.add_message(id, attrs) do
-      {:ok, msg} -> json(conn, 201, %{data: msg})
+      {:ok, msg} ->
+        json(conn, 201, %{data: msg})
+
       {:error, cs} ->
         errors = Ecto.Changeset.traverse_errors(cs, fn {msg, _} -> msg end)
         json(conn, 422, %{error: "validation_failed", details: errors})
@@ -46,5 +50,5 @@ defmodule SomaWeb.ConversationController do
     end
   end
 
-  match _, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+  match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
 end

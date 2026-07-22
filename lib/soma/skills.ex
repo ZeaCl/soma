@@ -45,7 +45,14 @@ defmodule Soma.Skills do
             |> String.split("\n")
             |> Enum.find(&(&1 != "" && !String.starts_with?(&1, ["---", "name:", "#"])))
 
-          [%{name: name, description: String.slice(desc || "", 0, 120), builtin: false, custom: true}]
+          [
+            %{
+              name: name,
+              description: String.slice(desc || "", 0, 120),
+              builtin: false,
+              custom: true
+            }
+          ]
         end
       end)
 
@@ -63,6 +70,7 @@ defmodule Soma.Skills do
 
   defp read_agent_registry do
     reg_file = Path.join(@custom_dir, ".registry.json")
+
     case file_system().read(reg_file) do
       {:ok, json} -> Jason.decode!(json)
       _ -> %{}
@@ -78,6 +86,7 @@ defmodule Soma.Skills do
 
       nil ->
         path = Path.join(@builtin_dir, "#{name}/SKILL.md")
+
         if file_system().exists?(path) do
           {:ok, file_system().read!(path), :builtin}
         else
@@ -92,11 +101,20 @@ defmodule Soma.Skills do
     case Repo.get_by(CustomSkill, organization_id: org_id, name: name) do
       nil ->
         %CustomSkill{}
-        |> CustomSkill.changeset(%{organization_id: org_id, name: name, content: content, is_active: true})
+        |> CustomSkill.changeset(%{
+          organization_id: org_id,
+          name: name,
+          content: content,
+          is_active: true
+        })
         |> Repo.insert()
         |> case do
-          {:ok, skill} -> write_custom_skill_file(name, content); {:ok, skill}
-          error -> error
+          {:ok, skill} ->
+            write_custom_skill_file(name, content)
+            {:ok, skill}
+
+          error ->
+            error
         end
 
       skill ->
@@ -104,8 +122,12 @@ defmodule Soma.Skills do
         |> CustomSkill.changeset(%{content: content, is_active: true})
         |> Repo.update()
         |> case do
-          {:ok, skill} -> write_custom_skill_file(name, content); {:ok, skill}
-          error -> error
+          {:ok, skill} ->
+            write_custom_skill_file(name, content)
+            {:ok, skill}
+
+          error ->
+            error
         end
     end
   end
@@ -114,7 +136,9 @@ defmodule Soma.Skills do
 
   def delete(org_id, name) do
     case Repo.get_by(CustomSkill, organization_id: org_id, name: name) do
-      nil -> {:error, :not_found}
+      nil ->
+        {:error, :not_found}
+
       skill ->
         Repo.update(CustomSkill.changeset(skill, %{is_active: false}))
         remove_custom_skill_file(name)
@@ -143,19 +167,24 @@ defmodule Soma.Skills do
 
   def update_agent_config(agent_id, attrs) do
     config = Map.take(attrs, ["system_prompt", "skills", "tools", "workspace_paths", "engine"])
+
     case thalamus_client().update_user(agent_id, config, nil) do
       {:ok, _} ->
         update_local_config(agent_id, config)
         {:ok, config}
-      error -> error
+
+      error ->
+        error
     end
   end
 
   def create_agent(org_id, attrs, token \\ nil) do
     body = %{
-      email: attrs["email"], name: attrs["name"],
+      email: attrs["email"],
+      name: attrs["name"],
       password: attrs["password"] || random_password(),
-      is_agent: true, organization_id: org_id,
+      is_agent: true,
+      organization_id: org_id,
       agent_config: %{
         engine: attrs["engine"] || "pi",
         system_prompt: attrs["system_prompt"],
@@ -169,7 +198,9 @@ defmodule Soma.Skills do
       {:ok, agent} ->
         update_local_config(agent["id"], agent["agent_config"] || %{})
         {:ok, agent}
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -185,6 +216,7 @@ defmodule Soma.Skills do
 
   def load_app_context(org_id, app) do
     path = Path.join(["/workspace/orgs", org_id, app, "AGENTS.md"])
+
     if file_system().exists?(path) do
       content = file_system().read!(path)
       expanded = expand_references(content, Path.dirname(path))
@@ -197,6 +229,7 @@ defmodule Soma.Skills do
   defp expand_references(content, base_dir) do
     Regex.replace(~r/`([^`]+\.(?:md|html|json))`/, content, fn _, fpath ->
       resolved = Path.expand(fpath, base_dir)
+
       if file_system().exists?(resolved) do
         "`#{fpath}`:\n\n#{file_system().read!(resolved)}\n"
       else
@@ -214,6 +247,7 @@ defmodule Soma.Skills do
   defp update_local_config(agent_id, config) do
     config_dir = "/tmp/agent-configs"
     file_system().mkdir_p(config_dir)
+
     file_system().write(
       Path.join(config_dir, "#{agent_id}.json"),
       Jason.encode!(%{
@@ -231,18 +265,23 @@ defmodule Soma.Skills do
         {:ok, dirs} ->
           Enum.flat_map(dirs, fn dir ->
             path = Path.join([@builtin_dir, dir, "SKILL.md"])
+
             if file_system().exists?(path) do
               content = file_system().read!(path)
+
               [description | _] =
                 content
                 |> String.split("\n")
                 |> Enum.filter(&(&1 != "" && !String.starts_with?(&1, ["---", "name:", "#"])))
+
               [%{name: dir, description: String.slice(description || "", 0, 120), builtin: true}]
             else
               []
             end
           end)
-        _ -> []
+
+        _ ->
+          []
       end
     else
       []
@@ -263,19 +302,25 @@ defmodule Soma.Skills do
 
   defp save_custom_registry(name) do
     reg_file = Path.join(@custom_dir, ".registry.json")
-    reg = case file_system().read(reg_file) do
-      {:ok, json} -> Jason.decode!(json)
-      _ -> %{}
-    end
+
+    reg =
+      case file_system().read(reg_file) do
+        {:ok, json} -> Jason.decode!(json)
+        _ -> %{}
+      end
+
     file_system().write(reg_file, Jason.encode!(Map.put(reg, name, Map.get(reg, name, []))))
   end
 
   defp save_agent_registry(name, agent_ids) do
     reg_file = Path.join(@custom_dir, ".registry.json")
-    reg = case file_system().read(reg_file) do
-      {:ok, json} -> Jason.decode!(json)
-      _ -> %{}
-    end
+
+    reg =
+      case file_system().read(reg_file) do
+        {:ok, json} -> Jason.decode!(json)
+        _ -> %{}
+      end
+
     file_system().write(reg_file, Jason.encode!(Map.put(reg, name, agent_ids)))
   end
 end

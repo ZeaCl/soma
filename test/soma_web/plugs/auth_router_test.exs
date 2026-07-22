@@ -11,6 +11,7 @@ defmodule SomaWeb.AuthRouterTest do
     Application.put_env(:soma, :shell, Soma.Shell.Mock)
     Soma.ThalamusClient.Mock.start_link(%{})
     Soma.Shell.Mock.start_link(%{})
+
     on_exit(fn ->
       Application.delete_env(:soma, :thalamus_client)
       Application.delete_env(:soma, :shell)
@@ -38,7 +39,9 @@ defmodule SomaWeb.AuthRouterTest do
   end
 
   test "routes /sandboxes" do
-    conn = conn(:get, "/sandboxes?owner_type=agent&owner_id=x") |> AuthRouter.call(AuthRouter.init([]))
+    conn =
+      conn(:get, "/sandboxes?owner_type=agent&owner_id=x") |> AuthRouter.call(AuthRouter.init([]))
+
     assert conn.status in [401, 200]
   end
 

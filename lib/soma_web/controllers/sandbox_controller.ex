@@ -18,7 +18,11 @@ defmodule SomaWeb.SandboxController do
     else
       case Workspace.list_files(owner_type, owner_id, org_id, conn.params["path"] || "") do
         {:ok, files} ->
-          json(conn, 200, %{files: format_file_list(files), owner_type: owner_type, owner_id: owner_id})
+          json(conn, 200, %{
+            files: format_file_list(files),
+            owner_type: owner_type,
+            owner_id: owner_id
+          })
       end
     end
   end
@@ -93,7 +97,7 @@ defmodule SomaWeb.SandboxController do
     })
   end
 
-  match _, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+  match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
 
   defp do_create_sandbox(conn, attrs) do
     require Logger
@@ -111,7 +115,13 @@ defmodule SomaWeb.SandboxController do
           case UserSandbox.create(owner_id, org_id, teams: attrs["teams"]) do
             {:ok, uid, home} ->
               OrgWorkspace.ensure_shared(org_id)
-              json(conn, 201, %{ok: true, username: UserSandbox.username(owner_id), uid: uid, home: home})
+
+              json(conn, 201, %{
+                ok: true,
+                username: UserSandbox.username(owner_id),
+                uid: uid,
+                home: home
+              })
 
             {:error, reason} ->
               json(conn, 500, %{error: reason})
@@ -121,7 +131,13 @@ defmodule SomaWeb.SandboxController do
           case Sandbox.create(owner_id, org_id, teams: attrs["teams"]) do
             {:ok, uid, home} ->
               OrgWorkspace.ensure_shared(org_id)
-              json(conn, 201, %{ok: true, username: Sandbox.username(owner_id), uid: uid, home: home})
+
+              json(conn, 201, %{
+                ok: true,
+                username: Sandbox.username(owner_id),
+                uid: uid,
+                home: home
+              })
 
             {:error, reason} ->
               json(conn, 500, %{error: reason})

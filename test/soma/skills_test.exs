@@ -28,6 +28,7 @@ defmodule Soma.SkillsTest do
     Soma.ThalamusClient.Mock.set_responses(%{
       {:get_user, "t"} => {:ok, [%{"id" => "a1", "name" => "Bot"}]}
     })
+
     assert {:ok, agents} = Skills.list_agents("t")
     assert length(agents) == 1
   end
@@ -43,6 +44,7 @@ defmodule Soma.SkillsTest do
     Soma.ThalamusClient.Mock.set_responses(%{
       {:get_user_by_id, "a1"} => {:ok, %{"id" => "a1", "name" => "T"}}
     })
+
     assert {:ok, %{"name" => "T"}} = Skills.get_agent("a1")
   end
 
@@ -50,6 +52,7 @@ defmodule Soma.SkillsTest do
     Soma.ThalamusClient.Mock.set_responses(%{
       {:get_user_by_id, "x"} => {:error, :not_found}
     })
+
     assert {:error, :not_found} = Skills.get_agent("x")
   end
 
@@ -60,9 +63,11 @@ defmodule Soma.SkillsTest do
 
   test "update_agent_config/2" do
     cfg = %{"system_prompt" => "hi", "engine" => "pi"}
+
     Soma.ThalamusClient.Mock.set_responses(%{
       {:update_user, "a1"} => {:ok, cfg}
     })
+
     assert {:ok, ^cfg} = Skills.update_agent_config("a1", cfg)
   end
 
@@ -70,6 +75,7 @@ defmodule Soma.SkillsTest do
     Soma.ThalamusClient.Mock.set_responses(%{
       {:create_user, nil} => {:ok, %{"id" => "new", "agent_config" => %{}}}
     })
+
     assert {:ok, %{"id" => "new"}} = Skills.create_agent("org1", %{"email" => "a@b.com"})
   end
 
@@ -79,6 +85,7 @@ defmodule Soma.SkillsTest do
     Soma.FileSystem.Mock.set_responses(%{
       {:read, "/app/.pi-agent-skills/.registry.json"} => {:ok, "{}"}
     })
+
     assert {:ok, %{name: "skill1"}} = Skills.assign_to_agents("o1", "skill1", [])
   end
 

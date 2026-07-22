@@ -38,12 +38,15 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"role" => "user", "content" => "Hello"})
       |> ConversationController.call(ConversationController.init([]))
+
     assert post.status in [201, 200]
 
     # Show with messages
-    show = authed_conn(:get, "/#{conv.id}")
-           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"id" => conv.id}})
-           |> ConversationController.call(ConversationController.init([]))
+    show =
+      authed_conn(:get, "/#{conv.id}")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"id" => conv.id}})
+      |> ConversationController.call(ConversationController.init([]))
+
     assert show.status == 200
     assert length(Jason.decode!(show.resp_body)["messages"]) >= 1
 
@@ -54,16 +57,22 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"role" => "", "content" => ""})
       |> ConversationController.call(ConversationController.init([]))
+
     assert invalid.status == 422
 
     # Delete
-    del = authed_conn(:delete, "/#{conv.id}") |> ConversationController.call(ConversationController.init([]))
+    del =
+      authed_conn(:delete, "/#{conv.id}")
+      |> ConversationController.call(ConversationController.init([]))
+
     assert del.status == 200
   end
 
   test "GET /:id returns 404 for missing" do
-    conn = authed_conn(:get, "/00000000-0000-0000-0000-000000000099")
-           |> ConversationController.call(ConversationController.init([]))
+    conn =
+      authed_conn(:get, "/00000000-0000-0000-0000-000000000099")
+      |> ConversationController.call(ConversationController.init([]))
+
     assert conn.status == 404
   end
 
@@ -79,12 +88,15 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"name" => "test-skill-ci", "content" => "# Test"})
       |> SkillController.call(SkillController.init([]))
+
     assert create.status == 201
 
     # Show
-    show = authed_conn(:get, "/test-skill-ci")
-           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
-           |> SkillController.call(SkillController.init([]))
+    show =
+      authed_conn(:get, "/test-skill-ci")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+      |> SkillController.call(SkillController.init([]))
+
     assert show.status == 200
 
     # Update
@@ -95,11 +107,14 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"content" => "# Updated"})
       |> SkillController.call(SkillController.init([]))
+
     assert update.status == 200
 
-    del = authed_conn(:delete, "/test-skill-ci")
-          |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
-          |> SkillController.call(SkillController.init([]))
+    del =
+      authed_conn(:delete, "/test-skill-ci")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+      |> SkillController.call(SkillController.init([]))
+
     assert del.status == 204
 
     # Assign to agents
@@ -110,20 +125,25 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"agentIds" => []})
       |> SkillController.call(SkillController.init([]))
+
     assert assign.status == 200
   end
 
   test "GET /:name returns 404 for missing skill" do
-    conn = authed_conn(:get, "/no-existe")
-           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
-           |> SkillController.call(SkillController.init([]))
+    conn =
+      authed_conn(:get, "/no-existe")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
+      |> SkillController.call(SkillController.init([]))
+
     assert conn.status == 404
   end
 
   test "DELETE /:name returns 404 for missing skill" do
-    conn = authed_conn(:delete, "/no-existe")
-           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
-           |> SkillController.call(SkillController.init([]))
+    conn =
+      authed_conn(:delete, "/no-existe")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "no-existe"}})
+      |> SkillController.call(SkillController.init([]))
+
     assert conn.status == 404
   end
 
@@ -136,6 +156,7 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> put_req_header("content-type", "application/json")
       |> Map.put(:body_params, %{"name" => "test-key-ci"})
       |> ApiKeyController.call(ApiKeyController.init([]))
+
     assert conn.status == 201
     assert String.starts_with?(Jason.decode!(conn.resp_body)["api_key"], "zs_live_")
   end

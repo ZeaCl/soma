@@ -54,7 +54,12 @@ defmodule Soma.AgentRunnerTest do
     port = state.port
 
     # Simulate pi stdout via JSONL
-    jsonl = Jason.encode!(%{type: "message_update", assistantMessageEvent: %{type: "text_delta", delta: "Hola "}}) <> "\n"
+    jsonl =
+      Jason.encode!(%{
+        type: "message_update",
+        assistantMessageEvent: %{type: "text_delta", delta: "Hola "}
+      }) <> "\n"
+
     send(pid, {port, {:data, jsonl}})
     assert_receive {:agent_event, %{"type" => "delta", "text" => "Hola "}}, 500
 
@@ -68,7 +73,10 @@ defmodule Soma.AgentRunnerTest do
     state = :sys.get_state(pid)
     port = state.port
 
-    jsonl = Jason.encode!(%{type: "message_update", assistantMessageEvent: %{type: "thinking_start"}}) <> "\n"
+    jsonl =
+      Jason.encode!(%{type: "message_update", assistantMessageEvent: %{type: "thinking_start"}}) <>
+        "\n"
+
     send(pid, {port, {:data, jsonl}})
     assert_receive {:agent_event, %{"type" => "thinking_start"}}, 500
 
@@ -97,7 +105,12 @@ defmodule Soma.AgentRunnerTest do
     port = state.port
 
     # First send some text
-    delta = Jason.encode!(%{type: "message_update", assistantMessageEvent: %{type: "text_delta", delta: "OK"}}) <> "\n"
+    delta =
+      Jason.encode!(%{
+        type: "message_update",
+        assistantMessageEvent: %{type: "text_delta", delta: "OK"}
+      }) <> "\n"
+
     send(pid, {port, {:data, delta}})
     assert_receive {:agent_event, %{"type" => "delta"}}, 500
 
@@ -117,7 +130,10 @@ defmodule Soma.AgentRunnerTest do
     port = state.port
 
     send(pid, {port, {:exit_status, 1}})
-    assert_receive {:agent_event, %{"type" => "error", "message" => "Agent process exited with code 1"}}, 500
+
+    assert_receive {:agent_event,
+                    %{"type" => "error", "message" => "Agent process exited with code 1"}},
+                   500
 
     refute Process.alive?(pid)
   end
@@ -129,8 +145,17 @@ defmodule Soma.AgentRunnerTest do
     state = :sys.get_state(pid)
     port = state.port
 
-    d1 = Jason.encode!(%{type: "message_update", assistantMessageEvent: %{type: "text_delta", delta: "Hello "}}) <> "\n"
-    d2 = Jason.encode!(%{type: "message_update", assistantMessageEvent: %{type: "text_delta", delta: "World"}}) <> "\n"
+    d1 =
+      Jason.encode!(%{
+        type: "message_update",
+        assistantMessageEvent: %{type: "text_delta", delta: "Hello "}
+      }) <> "\n"
+
+    d2 =
+      Jason.encode!(%{
+        type: "message_update",
+        assistantMessageEvent: %{type: "text_delta", delta: "World"}
+      }) <> "\n"
 
     send(pid, {port, {:data, d1}})
     assert_receive {:agent_event, %{"type" => "delta", "text" => "Hello "}}, 500

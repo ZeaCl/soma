@@ -63,13 +63,24 @@ defmodule Soma.AgentRunner do
           case Jason.decode(content) do
             {:ok, config} ->
               args = pi_args
-              args = if config["system_prompt"], do: args ++ ["--system-prompt", config["system_prompt"]], else: args
-              args = if config["provider"], do: args ++ ["--provider", config["provider"]], else: args
+
+              args =
+                if config["system_prompt"],
+                  do: args ++ ["--system-prompt", config["system_prompt"]],
+                  else: args
+
+              args =
+                if config["provider"], do: args ++ ["--provider", config["provider"]], else: args
+
               args = if config["model"], do: args ++ ["--model", config["model"]], else: args
               args
-            _ -> pi_args
+
+            _ ->
+              pi_args
           end
-        _ -> pi_args
+
+        _ ->
+          pi_args
       end
 
     pi_cmd = "#{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
@@ -107,7 +118,14 @@ defmodule Soma.AgentRunner do
     shell().port_command(state.port, msg)
 
     {:noreply,
-     %{state | current_text: "", current_thinking: "", in_thinking: false, current_tools: [], prompt_start: System.monotonic_time(:millisecond)}}
+     %{
+       state
+       | current_text: "",
+         current_thinking: "",
+         in_thinking: false,
+         current_tools: [],
+         prompt_start: System.monotonic_time(:millisecond)
+     }}
   end
 
   @impl true
@@ -230,15 +248,18 @@ defmodule Soma.AgentRunner do
 
   defp handle_delta(%{"type" => "thinking_end"}, state) do
     send(state.caller, {:agent_event, %{"type" => "thinking_end"}})
+
     if state.thinking_start do
       duration = System.monotonic_time(:millisecond) - state.thinking_start
       Soma.AgentMetrics.thinking_duration(state.agent_id, duration)
     end
+
     %{state | in_thinking: false, thinking_start: nil}
   end
 
   defp handle_delta(%{"type" => "error", "reason" => reason}, state) do
     Soma.AgentMetrics.error_occurred(state.agent_id, reason)
+
     send(
       state.caller,
       {:agent_event, %{"type" => "error", "message" => "Agent error: #{reason}"}}

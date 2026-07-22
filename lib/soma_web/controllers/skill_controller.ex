@@ -28,7 +28,9 @@ defmodule SomaWeb.SkillController do
     attrs = conn.body_params
 
     case Skills.upsert(org_id, attrs["name"], attrs["content"]) do
-      {:ok, skill} -> json(conn, 201, %{data: skill})
+      {:ok, skill} ->
+        json(conn, 201, %{data: skill})
+
       {:error, cs} ->
         errors = Ecto.Changeset.traverse_errors(cs, fn {msg, _} -> msg end)
         json(conn, 422, %{error: "validation_failed", details: errors})
@@ -40,7 +42,9 @@ defmodule SomaWeb.SkillController do
     attrs = conn.body_params
 
     case Skills.upsert(org_id, name, attrs["content"]) do
-      {:ok, skill} -> json(conn, 200, %{data: skill})
+      {:ok, skill} ->
+        json(conn, 200, %{data: skill})
+
       {:error, cs} ->
         errors = Ecto.Changeset.traverse_errors(cs, fn {msg, _} -> msg end)
         json(conn, 422, %{error: "validation_failed", details: errors})
@@ -64,5 +68,5 @@ defmodule SomaWeb.SkillController do
     end
   end
 
-  match _, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+  match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
 end
