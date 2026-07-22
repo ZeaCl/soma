@@ -9,19 +9,21 @@ Soma is the **AgentHub** for ZEA Platform — multi-agent chat, sandboxed execut
 | I want to... | Start here |
 |---|---|
 | 🟦 **Add AI chat to my React app** | [Getting Started → Dev](getting-started.md#-dev-integrating-soma-in-my-app) |
-| 🤖 **Act as an AI agent / build agents** | [Skills for Agents](../skill/SKILL.md) |
-| 🟢 **Deploy Soma on my own infra** | [Getting Started → DevOps](getting-started.md#-devops-deploy-on-prem) |
+| 🤖 **Act as an AI agent / build agents** | [Agents Overview](agents/overview.md) |
+| 🟢 **Deploy Soma on my own infra** | [Deployment](deployment/overview.md) |
 | 🟣 **Administer agents, skills, workspaces** | [Getting Started → Admin](getting-started.md#-admin-manage-agents) |
-| 🟡 **Understand the architecture** | [Architecture Overview](#architecture) |
+| 🟡 **Understand the architecture** | [Architecture Overview](architecture/overview.md) |
+| 📊 **Monitor Soma** | [Monitoring](monitoring/overview.md) |
 
 ---
 
-## SDK — @zea.cl/soma-sdk
+## SDK — `@zea.cl/soma-sdk`
 
 | Guide | Description |
 |---|---|
-| [React SDK](integrations/react-sdk.md) | Components, hooks, themes, auth — full integration guide |
-| [CLI Reference](integrations/cli.md) | Command-line tools for agent & workspace management |
+| [React SDK](integrations/react-sdk.md) | Components, hooks, themes, auth |
+| [WebSocket Protocol](integrations/websocket.md) | Agent chat protocol |
+| [CLI Reference](cli/overview.md) | `zea-soma` command-line tool |
 
 ---
 
@@ -40,12 +42,13 @@ Soma is the **AgentHub** for ZEA Platform — multi-agent chat, sandboxed execut
 
 ## Agent Skills
 
-Skills are markdown files that teach AI agents how to use Soma. Agents read these at runtime.
+Skills are markdown files that teach AI agents how to use Soma and ZEA services.
 
 | Skill | Description |
 |---|---|
 | [Soma Agents](../skill/SKILL.md) | Integrate Soma in React apps — SDK, auth, CLI, patterns |
 | [User Sandbox](../skill/user-sandbox/SKILL.md) | Manage user sandboxes — files, uploads, shared workspaces |
+| [Fund Management](../skill/fund-management/SKILL.md) | Fund management APIs — funds, investors, commitments |
 
 ---
 
@@ -53,22 +56,46 @@ Skills are markdown files that teach AI agents how to use Soma. Agents read thes
 
 ```
 Soma Container (Alpine Linux)
-├── Pi Sidecar (:3002)          WebSocket agents + HTTP API
-│   ├── agent-rpc.ts            Orchestrator (init → sandbox → bridge → prompt)
-│   ├── agent-sandbox.ts        Linux user lifecycle (useradd/userdel)
-│   └── rpc-bridge.ts           stdin/stdout JSONL ↔ pi --mode rpc
+├── Elixir API (:4084)          REST + WebSocket + metrics
+│   ├── Plug.Router             Conversations, files, skills, agents
+│   ├── AgentSocket             WebSocket chat handler
+│   ├── AgentRunner             pi --mode rpc subprocess manager
+│   └── PromEx                  /metrics endpoint
 │
-├── Elixir API (:4084)          REST API
-│   └── Phoenix Plug.Router     Conversations, files, skills, agents
+├── Sandbox Layer (OS)
+│   └── /home/{soma,user}-{id}/ Linux users with chmod 700
+│       ├── workspace/          Agent/user files
+│       ├── .agents/skills/     Agent skills (isolated)
+│       └── .pi-sessions/       pi CLI sessions
 │
-└── Sandbox Layer (OS)
-    └── /home/{soma,user}-{id}/ Linux users with chmod 700
-        ├── workspace/          Agent/user files
-        ├── .agents/skills/     Agent skills (isolated)
-        └── .pi-sessions/       pi CLI sessions
+└── Sidecar
+    └── pi CLI                  AI engine (per-agent subprocess)
 ```
 
-- [Full architecture overview](architecture.md) (coming soon)
+- [Full architecture overview](architecture/overview.md)
+
+---
+
+## Monitoring
+
+| Guide | Description |
+|---|---|
+| [Overview](monitoring/overview.md) | Prometheus + Grafana + Loki + Tempo |
+| [Metrics Reference](monitoring/metrics.md) | All Soma metrics (agents, BEAM, Ecto) |
+| [Alerts](monitoring/alerts.md) | Alert rules and runbooks |
+| [Dashboards](monitoring/dashboards.md) | AI Services, Services Health |
+
+---
+
+## Guides
+
+| Guide | Description |
+|---|---|
+| [Deploy with Docker](deployment/overview.md) | Docker + docker-compose |
+| [Configure Agents](agents/configuration.md) | Agent settings, engines, models |
+| [Create Custom Skills](guides/custom-skills.md) | Write and deploy agent skills |
+| [Setup CI/CD](guides/ci-cd.md) | GitHub Actions pipeline |
+| [Troubleshooting](guides/troubleshooting.md) | Common issues and solutions |
 
 ---
 
@@ -79,4 +106,4 @@ Soma Container (Alpine Linux)
 | [README](../README.md) | Project overview and quick start |
 | [Integration Guide](../INTEGRATION_GUIDE.md) | Step-by-step integration for React apps |
 | [Isolation Plan](../PLAN-ISOLATION.md) | Sandbox security design |
-| [OpenAPI Spec](OPENAPI_SPEC.yaml) | Full API specification (coming soon) |
+| [CLI Reference](cli/overview.md) | zea-soma command reference |
