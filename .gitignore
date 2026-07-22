@@ -3,3 +3,4 @@ deps/
 .git/
 *.ez
 erl_crash.dump
+node_modules/
