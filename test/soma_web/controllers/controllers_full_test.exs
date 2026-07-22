@@ -138,6 +138,36 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status == 200
   end
 
+  test "file upload fails when path is invalid" do
+    # Write a file, then try to create a file INSIDE it (treating the file as a dir)
+    Workspace.write_file(@org_id, "parent.txt", "blocker")
+    conn =
+      :post
+      |> authed("/upload")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"name" => "child.txt", "data" => Base.encode64("x"), "path" => "parent.txt"})
+      |> FileController.call(FileController.init([]))
+    # Workspace.write_file should fail because parent.txt is a file, not a directory
+    assert conn.status == 500
+  end
+
+  test "file recover with missing file returns 500" do
+    conn =
+      :post
+      |> authed("/recover")
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"path" => "", "commit" => "abc123"})
+      |> FileController.call(FileController.init([]))
+    assert conn.status == 500
+  end
+
+  test "file content with md extension returns markdown" do
+    Workspace.write_file(@org_id, "readme.md", "# Hello")
+    conn = authed(:get, "/content?path=readme.md")
+           |> FileController.call(FileController.init([]))
+    assert conn.status == 200
+  end
+
   test "file mkdir creates directory" do
     conn =
       :post
