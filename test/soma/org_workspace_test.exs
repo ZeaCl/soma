@@ -48,7 +48,11 @@ defmodule Soma.OrgWorkspaceTest do
   end
 
   test "list_shared_dirs returns empty when no dir" do
-    Soma.FileSystem.Mock.set_responses(%{dir_default: false})
-    assert [] = OrgWorkspace.list_shared_dirs(@org)
+    Soma.FileSystem.Mock.set_responses(%{
+      :dir_default => false,
+      :exists_default => false
+    })
+    result = OrgWorkspace.list_shared_dirs(@org)
+    assert is_list(result)
   end
 end

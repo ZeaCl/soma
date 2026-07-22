@@ -82,4 +82,23 @@ defmodule Soma.WorkspaceTest do
     {:ok, commits} = Workspace.history(@org, "changelog.md")
     assert length(commits) >= 2
   end
+
+  test "recover file to previous version" do
+    Workspace.write_file(@org, "recover.md", "v1")
+    Workspace.write_file(@org, "recover.md", "v2")
+    {:ok, commits} = Workspace.history(@org, "recover.md")
+    # commits are newest first, so last commit is v1
+    last_commit = List.last(commits)
+    assert {:ok, "recover.md"} = Workspace.recover(@org, "recover.md", last_commit.hash)
+    assert {:ok, "v1"} = Workspace.read_file(@org, "recover.md")
+  end
+
+  test "app_path returns correct path" do
+    path = Workspace.app_path(@org, "myapp")
+    assert String.ends_with?(path, "test-org-workspace/myapp")
+  end
+
+  test "push returns not_configured when no remote" do
+    assert {:ok, :not_configured} = Workspace.push(@org)
+  end
 end
