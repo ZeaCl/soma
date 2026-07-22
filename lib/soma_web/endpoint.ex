@@ -18,5 +18,6 @@ defmodule SomaWeb.Endpoint do
     only: ~w(index.html assets favicon.ico zea-design.css icono-zea.svg text-zea.svg)
   )
 
+  plug(SomaWeb.TracingPlug)
   plug(SomaWeb.Router)
 end

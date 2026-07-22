@@ -64,6 +64,31 @@ defmodule Soma.AgentMetrics do
           tags: [:agent_id],
           unit: {:native, :millisecond}
         )
+      ),
+      Event.build(
+        :soma_workspaces_total,
+        :telemetry_metrics.last_value(
+          name: [:soma, :workspaces, :total],
+          event_name: [:soma, :workspace, :count],
+          description: "Total workspaces"
+        )
+      ),
+      Event.build(
+        :soma_skills_executed_total,
+        :telemetry_metrics.counter(
+          name: [:soma, :skills, :executed, :total],
+          event_name: [:soma, :skill, :execute],
+          description: "Total skills executed",
+          tags: [:skill_name]
+        )
+      ),
+      Event.build(
+        :soma_sidecar_pi_status,
+        :telemetry_metrics.last_value(
+          name: [:soma, :sidecar, :pi, :status],
+          event_name: [:soma, :sidecar, :status],
+          description: "Pi Sidecar status (1=UP, 0=DOWN)"
+        )
       )
     ]
   end
@@ -73,8 +98,6 @@ defmodule Soma.AgentMetrics do
 
   @impl true
   def manual_metrics(_opts), do: []
-
-  # ── Public helpers ──────────────────────────────────────────────────
 
   def session_started(agent_id, engine) do
     :telemetry.execute([:soma, :agent, :session, :start], %{}, %{agent_id: agent_id, engine: engine})
@@ -98,5 +121,17 @@ defmodule Soma.AgentMetrics do
 
   def thinking_duration(agent_id, duration_ms) do
     :telemetry.execute([:soma, :agent, :thinking], %{duration: duration_ms}, %{agent_id: agent_id})
+  end
+
+  def workspace_count(_count) do
+    :telemetry.execute([:soma, :workspace, :count], %{}, %{})
+  end
+
+  def skill_executed(skill_name) do
+    :telemetry.execute([:soma, :skill, :execute], %{}, %{skill_name: skill_name})
+  end
+
+  def sidecar_status(up?) do
+    :telemetry.execute([:soma, :sidecar, :status], %{}, %{status: if(up?, do: 1, else: 0)})
   end
 end

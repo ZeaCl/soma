@@ -46,7 +46,11 @@ defmodule Soma.MixProject do
       {:excoveralls, "~> 0.18", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
-      {:prom_ex, "~> 1.11"}
+      {:prom_ex, "~> 1.11"},
+      {:opentelemetry, "~> 1.4"},
+      {:opentelemetry_api, "~> 1.3"},
+      {:opentelemetry_ecto, "~> 1.2"},
+      {:opentelemetry_exporter, "~> 1.7"}
     ]
   end
 
