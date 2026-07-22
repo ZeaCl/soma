@@ -61,6 +61,12 @@ defmodule SomaWeb.ControllerIntegrationTest do
     assert del.status == 200
   end
 
+  test "GET /:id returns 404 for missing conversation" do
+    conn = authed_conn(:get, "/00000000-0000-0000-0000-000000000099")
+           |> ConversationController.call(ConversationController.init([]))
+    assert conn.status == 404
+  end
+
   # ── SkillController ──────────────────────────────────────────────────
 
   test "skill CRUD flow" do
