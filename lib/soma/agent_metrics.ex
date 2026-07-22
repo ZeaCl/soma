@@ -100,3 +100,18 @@ defmodule Soma.AgentMetrics do
     :telemetry.execute([:soma, :agent, :thinking], %{duration: duration_ms}, %{agent_id: agent_id})
   end
 end
+
+# ── Workspaces helper ──
+def workspace_count(count) do
+  :telemetry.execute([:soma, :workspace, :count], %{}, %{})
+end
+
+# ── Skill executed helper ──
+def skill_executed(skill_name) do
+  :telemetry.execute([:soma, :skill, :execute], %{}, %{skill_name: skill_name})
+end
+
+# ── Pi Sidecar status helper ──
+def sidecar_status(up?) do
+  :telemetry.execute([:soma, :sidecar, :status], %{}, %{status: if(up?, do: 1, else: 0)})
+end

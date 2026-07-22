@@ -28,3 +28,13 @@ config :soma, :agent_host, System.get_env("AGENT_HOST", "http://zea-agent:3001")
 config :logger, :console,
   format: {Soma.LogFormatter, :format},
   metadata: [:agent_id, :request_id, :org_id]
+
+# ── OpenTelemetry ──────────────────────────────────────────────────────
+config :opentelemetry,
+  span_processor: :batch,
+  traces_exporter: :otlp
+
+config :opentelemetry_exporter,
+  otlp_endpoint: System.get_env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318"),
+  otlp_protocol: :http_protobuf,
+  otlp_compression: :gzip

@@ -1,13 +1,17 @@
 defmodule Soma.Application do
-  @moduledoc "Application entry point — inicia el supervisor con Endpoint."
+  @moduledoc "Application entry point — inicia el supervisor con Endpoint, PromEx y OTel."
   use Application
 
   @impl true
   def start(_type, _args) do
+    # OpenTelemetry Ecto tracer
+    :ok = OpentelemetryEcto.setup([:soma, :repo])
+
     children = [
       Soma.Repo,
       {Phoenix.PubSub, name: Soma.PubSub},
-      SomaWeb.Endpoint
+      SomaWeb.Endpoint,
+      PromEx
     ]
 
     opts = [strategy: :one_for_one, name: Soma.Supervisor]
