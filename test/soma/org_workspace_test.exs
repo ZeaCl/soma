@@ -70,4 +70,19 @@ defmodule Soma.OrgWorkspaceTest do
     Soma.FileSystem.Mock.set_responses(%{:exists_default => false, :dir_default => true})
     assert {:ok, _} = OrgWorkspace.mkdir(@org, "newdir")
   end
+
+  test "write_file creates file" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => true, :dir_default => true})
+    assert {:ok, "file.txt"} = OrgWorkspace.write_file(@org, "file.txt", "content")
+  end
+
+  test "delete removes file" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => true, :dir_default => true})
+    assert {:ok, _} = OrgWorkspace.delete(@org, "old.txt")
+  end
+
+  test "move renames file" do
+    Soma.FileSystem.Mock.set_responses(%{:exists_default => true, :dir_default => true})
+    assert {:ok, "dst.txt"} = OrgWorkspace.move(@org, "src.txt", "dst.txt")
+  end
 end
