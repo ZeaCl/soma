@@ -54,7 +54,7 @@ jobs:
         run: mix format --check-formatted
 
       - name: Run tests with coverage
-        run: mix coveralls.json --threshold 0
+        run: mix coveralls.json
         env:
           DATABASE_URL: ecto://postgres:postgres@localhost:5432/soma_test
           MIX_ENV: test
