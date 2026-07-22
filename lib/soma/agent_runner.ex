@@ -98,7 +98,7 @@ defmodule Soma.AgentRunner do
   @impl true
   def handle_cast({:prompt, text}, state) do
     msg = Jason.encode!(%{type: "prompt", message: text}) <> "\n"
-    Port.command(state.port, msg)
+    shell().port_command(state.port, msg)
 
     {:noreply,
      %{state | current_text: "", current_thinking: "", in_thinking: false, current_tools: []}}
@@ -107,14 +107,13 @@ defmodule Soma.AgentRunner do
   @impl true
   def handle_cast(:abort, state) do
     msg = Jason.encode!(%{type: "abort"}) <> "\n"
-    Port.command(state.port, msg)
+    shell().port_command(state.port, msg)
     {:noreply, state}
   end
 
   @impl true
   def handle_cast(:stop, state) do
-    # Close port to terminate the sudo process
-    Port.close(state.port)
+    shell().port_close(state.port)
     {:stop, :normal, state}
   end
 
@@ -194,7 +193,7 @@ defmodule Soma.AgentRunner do
       when method in ["select", "confirm", "input", "editor"] ->
         resp = %{type: "extension_ui_response", id: id, cancelled: true}
         resp = if method == "confirm", do: Map.put(resp, :confirmed, false), else: resp
-        Port.command(state.port, Jason.encode!(resp) <> "\n")
+        shell().port_command(state.port, Jason.encode!(resp) <> "\n")
         state
 
       _ ->

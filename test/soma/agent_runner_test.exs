@@ -11,6 +11,12 @@ defmodule Soma.AgentRunnerTest do
     Application.put_env(:soma, :file_system, Soma.FileSystem.Mock)
     Soma.Shell.Mock.start_link(%{})
     Soma.FileSystem.Mock.start_link(%{})
+
+    on_exit(fn ->
+      Application.delete_env(:soma, :shell)
+      Application.delete_env(:soma, :file_system)
+    end)
+
     :ok
   end
 
@@ -23,15 +29,18 @@ defmodule Soma.AgentRunnerTest do
     AgentRunner.stop(pid)
   end
 
-  test "send_prompt and abort do not crash" do
+  test "send_prompt and abort are cast to the GenServer" do
     {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
+    # These cast operations should not crash the GenServer (even if port is mock)
     AgentRunner.send_prompt(pid, "hello")
     AgentRunner.abort(pid)
-    # Stop and wait for exit message
+
+    # Monitor for clean shutdown
+    Process.monitor(pid)
     AgentRunner.stop(pid)
-    refute Process.alive?(pid)
+    assert_receive {:DOWN, _, :process, ^pid, _}, 1000
   end
 
   # ── JSONL processing via port messages ───────────────────────────────

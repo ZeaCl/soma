@@ -7,9 +7,13 @@ defmodule Soma.SandboxTest do
   @org "00000000-0000-0000-0000-000000000001"
 
   setup do
-    # Inyectar mock de shell
     Application.put_env(:soma, :shell, Soma.Shell.Mock)
     Soma.Shell.Mock.start_link(%{})
+
+    on_exit(fn ->
+      Application.delete_env(:soma, :shell)
+    end)
+
     :ok
   end
 

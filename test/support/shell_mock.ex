@@ -36,4 +36,10 @@ defmodule Soma.Shell.Mock do
   def spawn_port(_port_spec, _options) do
     make_ref()
   end
+
+  @impl true
+  def port_command(_port, _data), do: true
+
+  @impl true
+  def port_close(_port), do: true
 end

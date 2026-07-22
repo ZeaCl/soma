@@ -7,6 +7,8 @@ defmodule Soma.Shell do
 
   @callback cmd(binary(), [binary()], keyword()) :: {binary(), integer()}
   @callback spawn_port(tuple(), [term()]) :: port()
+  @callback port_command(port(), binary()) :: boolean()
+  @callback port_close(port()) :: boolean()
 
   def impl do
     Application.get_env(:soma, :shell, Soma.Shell.Real)

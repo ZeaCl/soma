@@ -9,6 +9,11 @@ defmodule SomaWeb.Plugs.AuthTest do
   setup do
     Application.put_env(:soma, :thalamus_client, Soma.ThalamusClient.Mock)
     Soma.ThalamusClient.Mock.start_link(%{})
+
+    on_exit(fn ->
+      Application.delete_env(:soma, :thalamus_client)
+    end)
+
     :ok
   end
 
