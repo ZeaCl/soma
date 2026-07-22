@@ -26,18 +26,25 @@ defmodule SomaWeb.ControllerIntegrationTest do
   # ── ConversationController ───────────────────────────────────────────
 
   test "conversation CRUD flow" do
-    # List
     list = authed_conn(:get, "/") |> ConversationController.call(ConversationController.init([]))
     assert list.status == 200
 
-    # Create conversation and post message
     conv = Conversations.get_or_create(@org_id, @user_id, "agent-ci", "chat")
 
+    # Show conversation
+    show = authed_conn(:get, "/#{conv.id}")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"id" => conv.id}})
+           |> ConversationController.call(ConversationController.init([]))
+    assert show.status == 200
+    body = Jason.decode!(show.resp_body)
+    assert body["id"] == conv.id
+
+    # Post message
     post =
       :post
       |> authed_conn("/#{conv.id}/messages")
       |> put_req_header("content-type", "application/json")
-      |> Map.put(:body_params, %{"role" => "user", "content" => "Hello CI"})
+      |> Map.put(:body_params, %{"role" => "user", "content" => "Hello"})
       |> ConversationController.call(ConversationController.init([]))
     assert post.status == 201
 
@@ -59,6 +66,22 @@ defmodule SomaWeb.ControllerIntegrationTest do
       |> Map.put(:body_params, %{"name" => "test-skill-ci", "content" => "# Test"})
       |> SkillController.call(SkillController.init([]))
     assert create.status == 201
+
+    # Show
+    show = authed_conn(:get, "/test-skill-ci")
+           |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+           |> SkillController.call(SkillController.init([]))
+    assert show.status == 200
+
+    # Update
+    update =
+      :put
+      |> authed_conn("/test-skill-ci")
+      |> Plug.Conn.put_private(:plug_route, %{path_params: %{"name" => "test-skill-ci"}})
+      |> put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"content" => "# Updated"})
+      |> SkillController.call(SkillController.init([]))
+    assert update.status == 200
 
     del = authed_conn(:delete, "/test-skill-ci") |> SkillController.call(SkillController.init([]))
     assert del.status == 204
