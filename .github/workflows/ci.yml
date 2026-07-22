@@ -61,13 +61,23 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          COV=$(python3 -c "import json; d=json.load(open('cover/excoveralls.json')); print(f\"{d['covered']/max(d['total'],1)*100:.1f}\")")
+          COV=$(python3 -c "
+import json
+d = json.load(open('cover/excoveralls.json'))
+total = 0; covered = 0
+for f in d.get('source_files', []):
+    for c in (f.get('coverage') or []):
+        if c is not None:
+            total += 1
+            if c > 0: covered += 1
+print(f'{covered/max(total,1)*100:.1f}')
+")
           echo "Coverage: ${COV}%"
-          if [ "$(echo "$COV < 50" | bc)" -eq 1 ]; then
-            echo "❌ Coverage ${COV}% < 50% threshold"
+          if [ "$(echo "$COV < 80" | bc)" -eq 1 ]; then
+            echo "❌ Coverage ${COV}% < 80% threshold"
             exit 1
           fi
-          echo "✅ Coverage ${COV}% >= 50%"
+          echo "✅ Coverage ${COV}% >= 80%"
 
   # ── CLI: syntax check + install + coverage ─────────────────────────────
   cli:
