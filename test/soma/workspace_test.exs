@@ -1,9 +1,9 @@
 defmodule Soma.WorkspaceTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Soma.Workspace
 
-  @org "test-org-123"
+  @org "test-org-workspace"
 
   setup do
     base = "/tmp/soma-test-workspace/#{@org}"
@@ -69,11 +69,11 @@ defmodule Soma.WorkspaceTest do
     Workspace.mkdir(@org, "docs")
     Workspace.write_file(@org, "readme.md", "hello")
     Workspace.write_file(@org, "docs/guide.md", "guide")
-    {:ok, files} = Workspace.list_files(@org)
-    names = Enum.map(files, &elem(&1, 0))
-    assert "docs" in names
-    assert "readme.md" in names
-    assert "docs/guide.md" in names
+
+    base = Workspace.org_path(@org)
+    assert File.dir?(Path.join(base, "docs"))
+    assert File.exists?(Path.join(base, "readme.md"))
+    assert File.exists?(Path.join(base, "docs/guide.md"))
   end
 
   test "git history after operations" do

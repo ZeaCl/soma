@@ -3,6 +3,9 @@ defmodule Soma.Workspace do
 
   @workspace_root Application.compile_env(:soma, :workspace_root, "/workspace/orgs")
 
+  defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
+  defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
+
   # ── Path resolution ──────────────────────────
 
   def org_path(org_id), do: Path.join(@workspace_root, org_id)
@@ -18,17 +21,17 @@ defmodule Soma.Workspace do
 
   def ensure_org(org_id) do
     base = org_path(org_id)
-    unless File.exists?(base) do
-      File.mkdir_p!(base)
+    unless fs().exists?(base) do
+      fs().mkdir_p(base)
       init_git(base)
     end
     :ok
   end
 
   defp init_git(dir) do
-    System.cmd("git", ["init"], cd: dir, stderr_to_stdout: true)
-    System.cmd("git", ["config", "user.email", "soma@zea.local"], cd: dir)
-    System.cmd("git", ["config", "user.name", "Soma Workspace"], cd: dir)
+    shell().cmd("git", ["init"], cd: dir, stderr_to_stdout: true)
+    shell().cmd("git", ["config", "user.email", "soma@zea.local"], cd: dir)
+    shell().cmd("git", ["config", "user.name", "Soma Workspace"], cd: dir)
   end
 
   # ── List (unified: user | agent | org) ──────
@@ -42,7 +45,8 @@ defmodule Soma.Workspace do
   def list_files(owner_type, owner_id, org_id, sub_path \\ "") do
     base = workspace_base(owner_type, owner_id, org_id)
     dir = if sub_path == "", do: base, else: Path.join(base, sub_path)
-    if File.dir?(dir) do
+
+    if fs().dir?(dir) do
       {:ok, scan_dir(dir, dir, "")}
     else
       {:ok, []}
@@ -74,7 +78,7 @@ defmodule Soma.Workspace do
   end
 
   defp scan_dir(root, dir, relative) do
-    case File.ls(dir) do
+    case fs().ls(dir) do
       {:ok, entries} ->
         entries
         |> Enum.reject(&String.starts_with?(&1, "."))
@@ -82,13 +86,16 @@ defmodule Soma.Workspace do
         |> Enum.flat_map(fn name ->
           full = Path.join(dir, name)
           rel = if relative == "", do: name, else: Path.join(relative, name)
-          if File.dir?(full) do
-            [{rel, "dir", File.stat!(full).size}] ++ scan_dir(root, full, rel)
+
+          if fs().dir?(full) do
+            [{rel, "dir", fs().stat(full).size}] ++ scan_dir(root, full, rel)
           else
-            [{rel, "file", File.stat!(full).size, Path.extname(name)}]
+            [{rel, "file", fs().stat(full).size, Path.extname(name)}]
           end
         end)
-      _ -> []
+
+      _ ->
+        []
     end
   end
 
@@ -96,8 +103,8 @@ defmodule Soma.Workspace do
 
   def read_file(org_id, relative_path) do
     with {:ok, full} <- resolve(org_id, relative_path),
-         true <- File.exists?(full) do
-      {:ok, File.read!(full)}
+         true <- fs().exists?(full) do
+      {:ok, fs().read!(full)}
     else
       _ -> {:error, :not_found}
     end
@@ -108,8 +115,8 @@ defmodule Soma.Workspace do
   def write_file(org_id, relative_path, content) do
     with {:ok, full} <- resolve(org_id, relative_path) do
       dir = Path.dirname(full)
-      File.mkdir_p!(dir)
-      File.write!(full, content)
+      fs().mkdir_p(dir)
+      fs().write(full, content)
       git_commit(org_id, "write: #{relative_path}")
       {:ok, relative_path}
     end
@@ -119,10 +126,10 @@ defmodule Soma.Workspace do
 
   def mkdir(org_id, relative_path) do
     with {:ok, full} <- resolve(org_id, relative_path) do
-      if File.exists?(full) do
+      if fs().exists?(full) do
         {:error, :already_exists}
       else
-        File.mkdir_p!(full)
+        fs().mkdir_p(full)
         git_commit(org_id, "mkdir: #{relative_path}")
         {:ok, relative_path}
       end
@@ -133,10 +140,15 @@ defmodule Soma.Workspace do
 
   def rename(org_id, old_path, new_name) do
     with {:ok, full_old} <- resolve(org_id, old_path),
-         true <- File.exists?(full_old) do
+         true <- fs().exists?(full_old) do
       full_new = Path.join(Path.dirname(full_old), new_name)
-      new_relative = if Path.dirname(old_path) == ".", do: new_name, else: Path.join(Path.dirname(old_path), new_name)
-      File.rename!(full_old, full_new)
+
+      new_relative =
+        if Path.dirname(old_path) == ".",
+          do: new_name,
+          else: Path.join(Path.dirname(old_path), new_name)
+
+      fs().rename(full_old, full_new)
       git_commit(org_id, "rename: #{old_path} -> #{new_name}")
       {:ok, new_relative}
     else
@@ -149,9 +161,9 @@ defmodule Soma.Workspace do
   def move(org_id, source, dest) do
     with {:ok, full_src} <- resolve(org_id, source),
          {:ok, full_dst} <- resolve(org_id, dest),
-         true <- File.exists?(full_src) do
-      File.mkdir_p!(Path.dirname(full_dst))
-      File.rename!(full_src, full_dst)
+         true <- fs().exists?(full_src) do
+      fs().mkdir_p(Path.dirname(full_dst))
+      fs().rename(full_src, full_dst)
       git_commit(org_id, "move: #{source} -> #{dest}")
       {:ok, dest}
     else
@@ -163,17 +175,19 @@ defmodule Soma.Workspace do
 
   def delete(org_id, relative_path) do
     with {:ok, full} <- resolve(org_id, relative_path),
-         true <- File.exists?(full) do
+         true <- fs().exists?(full) do
       result =
-        if File.dir?(full) do
-          case File.ls(full) do
+        if fs().dir?(full) do
+          case fs().ls(full) do
             {:ok, []} ->
-              File.rmdir!(full)
+              fs().rmdir(full)
               :ok
-            _ -> :directory_not_empty
+
+            _ ->
+              :directory_not_empty
           end
         else
-          File.rm!(full)
+          fs().rm(full)
           :ok
         end
 
@@ -181,6 +195,7 @@ defmodule Soma.Workspace do
         :ok ->
           git_commit(org_id, "delete: #{relative_path}")
           {:ok, relative_path}
+
         :directory_not_empty ->
           {:error, :directory_not_empty}
       end
@@ -193,10 +208,14 @@ defmodule Soma.Workspace do
 
   def history(org_id, relative_path) do
     base = org_path(org_id)
-    case System.cmd("git", ["log", "--oneline", "-10", "--follow", "--", relative_path],
-                    cd: base, stderr_to_stdout: true) do
+
+    case shell().cmd("git", ["log", "--oneline", "-10", "--follow", "--", relative_path],
+           cd: base,
+           stderr_to_stdout: true
+         ) do
       {output, 0} ->
-        commits = output
+        commits =
+          output
           |> String.trim()
           |> String.split("\n")
           |> Enum.reject(&(&1 == ""))
@@ -204,26 +223,34 @@ defmodule Soma.Workspace do
             [hash | msg] = String.split(line, " ")
             %{hash: hash, message: Enum.join(msg, " ")}
           end)
+
         {:ok, commits}
-      {_, _} -> {:ok, []}
+
+      {_, _} ->
+        {:ok, []}
     end
   end
 
   def recover(org_id, relative_path, commit_hash) do
     base = org_path(org_id)
-    case System.cmd("git", ["checkout", commit_hash, "--", relative_path],
-                    cd: base, stderr_to_stdout: true) do
+
+    case shell().cmd("git", ["checkout", commit_hash, "--", relative_path],
+           cd: base,
+           stderr_to_stdout: true
+         ) do
       {_, 0} ->
         git_commit(org_id, "recover: #{relative_path} @ #{String.slice(commit_hash, 0, 7)}")
         {:ok, relative_path}
-      {error, _} -> {:error, error}
+
+      {error, _} ->
+        {:error, error}
     end
   end
 
   def push(org_id) do
     base = org_path(org_id)
-    case System.cmd("git", ["push", "origin", "main"],
-                    cd: base, stderr_to_stdout: true) do
+
+    case shell().cmd("git", ["push", "origin", "main"], cd: base, stderr_to_stdout: true) do
       {output, 0} -> {:ok, String.slice(output, 0, 500)}
       {error, _} -> {:ok, :not_configured}
     end
@@ -231,7 +258,7 @@ defmodule Soma.Workspace do
 
   defp git_commit(org_id, message) do
     base = org_path(org_id)
-    System.cmd("git", ["add", "-A"], cd: base, stderr_to_stdout: true)
-    System.cmd("git", ["commit", "-m", message], cd: base, stderr_to_stdout: true)
+    shell().cmd("git", ["add", "-A"], cd: base, stderr_to_stdout: true)
+    shell().cmd("git", ["commit", "-m", message], cd: base, stderr_to_stdout: true)
   end
 end

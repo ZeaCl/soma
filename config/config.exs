@@ -3,7 +3,11 @@ import Config
 config :soma, ecto_repos: [Soma.Repo]
 
 config :soma, Soma.Repo,
-  url: System.get_env("DATABASE_URL", "postgresql://postgres:postgres_secure_password@localhost:5432/soma_prod"),
+  url:
+    System.get_env(
+      "DATABASE_URL",
+      "postgresql://postgres:postgres_secure_password@localhost:5432/soma_prod"
+    ),
   pool_size: 3
 
 config :soma, SomaWeb.Endpoint,

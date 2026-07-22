@@ -1,0 +1,6 @@
+[
+  {skip: [
+    {"Config.HTTPS", "Only used in Docker behind Caddy TLS termination"},
+    {"Traversal.FileModule: lib/soma/agent_runner.ex:50", "Path comes from config, not user input"}
+  ]}
+]

@@ -7,11 +7,24 @@ defmodule Soma.MixProject do
       version: "0.2.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      releases: [soma: [include_executables_for: [:unix], applications: [runtime_tools: :permanent]]],
+      elixirc_paths: elixirc_paths(Mix.env()),
+      releases: [
+        soma: [include_executables_for: [:unix], applications: [runtime_tools: :permanent]]
+      ],
+      aliases: aliases(),
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls, summary: [threshold: 0]],
       aliases: aliases(),
       deps: deps()
     ]
   end
+
+  def cli do
+    [preferred_envs: [coveralls: :test, "coveralls.json": :test, "coveralls.html": :test]]
+  end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def application do
     [
@@ -29,7 +42,10 @@ defmodule Soma.MixProject do
       {:req, "~> 0.5"},
       {:ecto_sql, "~> 3.12"},
       {:postgrex, "~> 0.19"},
-      {:corsica, "~> 2.1"}
+      {:corsica, "~> 2.1"},
+      {:excoveralls, "~> 0.18", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -38,7 +54,7 @@ defmodule Soma.MixProject do
       precommit: [
         "format --check-formatted",
         "compile --warnings-as-errors",
-        "test",
+        "coveralls.json",
         "cmd ./doctor-soma.sh"
       ]
     ]

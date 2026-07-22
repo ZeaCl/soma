@@ -1,12 +1,13 @@
 defmodule Soma.AgentShare do
+  @moduledoc "Schema para compartir agentes entre usuarios (Google Drive model)."
   use Ecto.Schema
   import Ecto.Changeset
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "agent_shares" do
-    field :agent_id, :string
-    field :shared_with_user_id, :string
-    field :shared_by_user_id, :string
+    field(:agent_id, :string)
+    field(:shared_with_user_id, :string)
+    field(:shared_by_user_id, :string)
     timestamps(updated_at: false)
   end
 

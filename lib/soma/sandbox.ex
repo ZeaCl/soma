@@ -2,19 +2,17 @@ defmodule Soma.Sandbox do
   @moduledoc """
   OS-level sandbox management — wraps soma-agent-useradd/userdel scripts.
 
-  Each agent gets a real Linux user with:
-  - Isolated home directory (chmod 700)
-  - Group membership (org + teams)
-  - Bind mounts for shared volumes
-  - Kernel-enforced access control
+  Cada agente tiene un usuario Linux real con home aislado (chmod 700).
   """
 
   @scripts_dir Application.compile_env(:soma, :scripts_dir, "/usr/local/bin")
 
-  @doc """
-  Creates a Linux user for an agent.
+  @doc "Shell adapter (inyectable para tests)"
+  def shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
 
-  Returns `{:ok, uid, home}` on success, `{:error, reason}` on failure.
+  @doc """
+  Crea un usuario Linux para un agente.
+  Retorna {:ok, uid, home} o {:error, reason}.
   """
   def create(agent_id, org_id, opts \\ []) do
     script = Path.join(@scripts_dir, "soma-agent-useradd")
@@ -23,48 +21,40 @@ defmodule Soma.Sandbox do
     mounts_json = Jason.encode!(mounts)
     args = [agent_id, org_id, teams, mounts_json]
 
-    case System.cmd(script, args, stderr_to_stdout: true) do
+    case shell().cmd(script, args, stderr_to_stdout: true) do
       {_output, 0} ->
-        username = "soma-#{String.slice(agent_id, 0, 12)}"
+        username = username(agent_id)
         home = "/home/#{username}"
-        uid = extract_uid_from_username(username)
+        uid = extract_uid(username)
         {:ok, uid, home}
+
       {output, code} ->
         {:error, "useradd failed (exit #{code}): #{String.slice(output, 0, 200)}"}
     end
   end
 
-  @doc """
-  Destroys the Linux user for an agent.
-
-  Returns `{:ok, agent_id}` on success, `{:error, reason}` on failure.
-  """
+  @doc "Destruye el usuario Linux de un agente."
   def destroy(agent_id) do
     script = Path.join(@scripts_dir, "soma-agent-userdel")
     args = [agent_id]
 
-    case System.cmd(script, args, stderr_to_stdout: true) do
+    case shell().cmd(script, args, stderr_to_stdout: true) do
       {_output, 0} -> {:ok, agent_id}
       {output, code} -> {:error, "userdel failed (exit #{code}): #{String.slice(output, 0, 200)}"}
     end
   end
 
-  @doc """
-  Returns the Linux username for a given agent ID.
-  """
+  @doc "Nombre de usuario Linux para un agent_id."
   def username(agent_id), do: "soma-#{String.slice(agent_id, 0, 12)}"
 
-  @doc """
-  Returns the home directory path for a given agent ID.
-  Home = /home/soma-{first12chars} (creado por useradd).
-  """
+  @doc "Home directory para un agent_id."
   def home_dir(agent_id), do: "/home/soma-#{String.slice(agent_id, 0, 12)}"
 
   # ── Private ──────────────────────────────────────────────────────────
 
-  defp extract_uid_from_username(username) do
-    case System.cmd("id", ["-u", username], stderr_to_stdout: true) do
-      {output, 0} -> String.trim(output) |> String.to_integer()
+  defp extract_uid(username) do
+    case shell().cmd("id", ["-u", username], stderr_to_stdout: true) do
+      {output, 0} -> String.to_integer(String.trim(output))
       _ -> nil
     end
   end

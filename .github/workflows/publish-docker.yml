@@ -1,9 +1,12 @@
-name: Publish Soma Image
+name: Publish Docker Image
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/zeacl/soma
 
 jobs:
   build-and-push:
@@ -11,21 +14,19 @@ jobs:
     permissions:
       contents: read
       packages: write
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Log in to the Container registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Soma
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/zeacl/soma:latest
+          tags: ${{ env.IMAGE }}:latest

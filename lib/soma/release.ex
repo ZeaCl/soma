@@ -1,8 +1,10 @@
 defmodule Soma.Release do
+  @moduledoc "Release tasks — migraciones de base de datos."
   @app :soma
 
   def migrate do
     load_app()
+
     for repo <- repos() do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
     end

@@ -1,15 +1,16 @@
 defmodule Soma.Message do
+  @moduledoc "Message schema — mensaje individual en una conversación."
   use Ecto.Schema
   import Ecto.Changeset
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "messages" do
-    field :conversation_id, :binary_id
-    field :role, :string
-    field :content, :string
-    field :thinking, :string
-    field :tools, :map
-    field :created_at, :utc_datetime
+    field(:conversation_id, :binary_id)
+    field(:role, :string)
+    field(:content, :string)
+    field(:thinking, :string)
+    field(:tools, :map)
+    field(:created_at, :utc_datetime)
   end
 
   def changeset(msg, attrs) do

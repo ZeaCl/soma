@@ -1,4 +1,5 @@
 defmodule Soma.Application do
+  @moduledoc "Application entry point — inicia el supervisor con Endpoint."
   use Application
 
   @impl true
@@ -8,6 +9,7 @@ defmodule Soma.Application do
       {Phoenix.PubSub, name: Soma.PubSub},
       SomaWeb.Endpoint
     ]
+
     opts = [strategy: :one_for_one, name: Soma.Supervisor]
     Supervisor.start_link(children, opts)
   end

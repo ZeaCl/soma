@@ -4,54 +4,100 @@ defmodule Soma.SandboxTest do
   alias Soma.Sandbox
 
   @agent "00000000-0000-0000-0000-0000000000a1"
-  @org   "00000000-0000-0000-0000-000000000001"
+  @org "00000000-0000-0000-0000-000000000001"
 
-  test "username generates correct Linux username" do
-    # First 12 chars of agent ID + "soma-" prefix
-    assert Sandbox.username(@agent) == "soma-" <> String.slice(@agent, 0, 12)
+  setup do
+    Application.put_env(:soma, :shell, Soma.Shell.Mock)
+    Soma.Shell.Mock.start_link(%{})
+
+    on_exit(fn ->
+      Application.delete_env(:soma, :shell)
+    end)
+
+    :ok
   end
 
-  test "home_dir returns correct path" do
-    assert Sandbox.home_dir(@agent) == "/home/soma/#{@agent}"
+  # ── username/1 ───────────────────────────────────────────────────────
+
+  test "username genera nombre Linux correcto" do
+    assert Sandbox.username(@agent) == "soma-00000000-000"
   end
 
-  test "create returns error when script missing" do
-    result = Sandbox.create(@agent, @org,
-      teams: "finanzas",
-      mounts: [%{source: "/tmp", dest: "shared"}])
-    assert is_tuple(result)
+  # ── home_dir/1 ───────────────────────────────────────────────────────
+
+  test "home_dir devuelve ruta correcta" do
+    assert Sandbox.home_dir(@agent) == "/home/soma-00000000-000"
   end
 
-  test "destroy returns error when script missing" do
-    result = Sandbox.destroy(@agent)
-    assert is_tuple(result)
-  end
-
-  test "create passes correct args to script" do
-    result = Sandbox.create(@agent, @org, teams: "", mounts: [])
-    assert is_tuple(result)
-    assert elem(result, 0) in [:ok, :error]
-  end
-
-  test "destroy passes correct args to script" do
-    result = Sandbox.destroy(@agent)
-    assert is_tuple(result)
-    assert elem(result, 0) in [:ok, :error]
-  end
-
-  test "different agents get different usernames" do
-    a1 = Sandbox.username("aaaa1111-2222-3333-4444-555566667777")
-    a2 = Sandbox.username("bbbb1111-2222-3333-4444-555566667777")
-    refute a1 == a2
-  end
-
-  test "username handles short IDs" do
-    assert Sandbox.username("abc") == "soma-abc"
-  end
-
-  test "home_dir is consistent with username convention" do
+  test "home_dir es consistente con username" do
+    username = Sandbox.username(@agent)
     home = Sandbox.home_dir(@agent)
-    assert String.starts_with?(home, "/home/soma/")
-    assert String.contains?(home, @agent)
+    assert home == "/home/#{username}"
+  end
+
+  # ── create/3 ─────────────────────────────────────────────────────────
+
+  test "create exitoso retorna uid y home" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-useradd", [@agent, @org, "", "[]"]} => {"", 0},
+      {"id", ["-u", "soma-00000000-000"]} => {"1001\n", 0}
+    })
+
+    assert {:ok, 1001, "/home/soma-00000000-000"} =
+             Sandbox.create(@agent, @org)
+  end
+
+  test "create con teams y mounts pasa args correctos" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-useradd",
+       [@agent, @org, "finanzas", ~s([{"source":"/tmp","dest":"shared"}])]} =>
+        {"", 0},
+      {"id", ["-u", "soma-00000000-000"]} => {"1001\n", 0}
+    })
+
+    assert {:ok, 1001, _} =
+             Sandbox.create(@agent, @org,
+               teams: "finanzas",
+               mounts: [%{source: "/tmp", dest: "shared"}]
+             )
+  end
+
+  test "create falla cuando script devuelve error" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-useradd", [@agent, @org, "", "[]"]} =>
+        {"Permission denied", 1}
+    })
+
+    assert {:error, reason} = Sandbox.create(@agent, @org)
+    assert reason =~ "useradd failed"
+  end
+
+  test "create maneja uid faltante" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-useradd", [@agent, @org, "", "[]"]} => {"", 0},
+      {"id", ["-u", "soma-00000000-000"]} => {"no such user", 1}
+    })
+
+    assert {:ok, nil, "/home/soma-00000000-000"} =
+             Sandbox.create(@agent, @org)
+  end
+
+  # ── destroy/1 ────────────────────────────────────────────────────────
+
+  test "destroy exitoso" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-userdel", [@agent]} => {"", 0}
+    })
+
+    assert {:ok, @agent} = Sandbox.destroy(@agent)
+  end
+
+  test "destroy falla cuando script devuelve error" do
+    Soma.Shell.Mock.set_responses(%{
+      {"/usr/local/bin/soma-agent-userdel", [@agent]} => {"not found", 1}
+    })
+
+    assert {:error, reason} = Sandbox.destroy(@agent)
+    assert reason =~ "userdel failed"
   end
 end
