@@ -8,6 +8,9 @@ defmodule Soma.AgentRunner do
 
   alias Soma.Sandbox
 
+  defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
+  defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
+
   @doc """
   Starts the AgentRunner for a specific agent and conversation.
   `caller` is the pid of the WebSocket handler to receive messages.
@@ -53,29 +56,18 @@ defmodule Soma.AgentRunner do
     pi_args = ["--mode", "rpc", "--session-dir", "#{home}/.pi-sessions"]
 
     pi_args =
-      case File.read(config_path) do
+      case fs().read(config_path) do
         {:ok, content} ->
           case Jason.decode(content) do
             {:ok, config} ->
               args = pi_args
-
-              args =
-                if config["system_prompt"],
-                  do: args ++ ["--system-prompt", config["system_prompt"]],
-                  else: args
-
-              args =
-                if config["provider"], do: args ++ ["--provider", config["provider"]], else: args
-
+              args = if config["system_prompt"], do: args ++ ["--system-prompt", config["system_prompt"]], else: args
+              args = if config["provider"], do: args ++ ["--provider", config["provider"]], else: args
               args = if config["model"], do: args ++ ["--model", config["model"]], else: args
               args
-
-            _ ->
-              pi_args
+            _ -> pi_args
           end
-
-        _ ->
-          pi_args
+        _ -> pi_args
       end
 
     pi_cmd = "#{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
@@ -84,13 +76,10 @@ defmodule Soma.AgentRunner do
     Logger.info("AgentRunner: sudo #{Enum.join(args, " ")}")
 
     port =
-      Port.open({:spawn_executable, System.find_executable("sudo")}, [
-        :binary,
-        :stream,
-        :use_stdio,
-        :exit_status,
-        args: args
-      ])
+      shell().spawn_port(
+        {:spawn_executable, System.find_executable("sudo")},
+        [:binary, :stream, :use_stdio, :exit_status, args: args]
+      )
 
     send(caller, {:agent_event, %{"type" => "ready"}})
 

@@ -8,10 +8,7 @@ defmodule Soma.Shell.Real do
   end
 
   @impl true
-  def spawn_port(executable, args) do
-    Port.open(
-      {:spawn_executable, executable},
-      [:binary, :stream, :use_stdio, :exit_status, args: args]
-    )
+  def spawn_port(port_spec, options) do
+    Port.open(port_spec, options)
   end
 end

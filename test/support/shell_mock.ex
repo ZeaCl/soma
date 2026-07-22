@@ -33,8 +33,7 @@ defmodule Soma.Shell.Mock do
   end
 
   @impl true
-  def spawn_port(_executable, _args) do
-    # En tests, devolver un reference como port falso
+  def spawn_port(_port_spec, _options) do
     make_ref()
   end
 end
