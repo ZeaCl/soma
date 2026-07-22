@@ -17,12 +17,14 @@ defmodule SomaWeb.AgentSocket do
         if state[:agent_runner] do
           Soma.AgentRunner.abort(state.agent_runner)
         end
+
         {:push, {:text, Jason.encode!(%{type: "cancelled"})}, state}
 
       {:ok, %{"type" => "prompt", "text" => text}} ->
         if state[:agent_runner] do
           spawn(fn ->
             Soma.Conversations.get_or_create(state.org_id, state.user_id, state.agent_id, "chat")
+
             Soma.Conversations.add_message(state.conv_id, %{
               role: "user",
               content: text
@@ -44,10 +46,19 @@ defmodule SomaWeb.AgentSocket do
   def handle_in(_frame, state), do: {:ok, state}
 
   @impl true
-  def handle_info({:agent_event, %{"type" => "done", "final_text" => final_text, "final_thinking" => final_thinking, "final_tools" => final_tools}}, state) do
+  def handle_info(
+        {:agent_event,
+         %{
+           "type" => "done",
+           "final_text" => final_text,
+           "final_thinking" => final_thinking,
+           "final_tools" => final_tools
+         }},
+        state
+      ) do
     spawn(fn ->
       tools = if Enum.empty?(final_tools), do: nil, else: final_tools
-      
+
       Soma.Conversations.add_message(state.conv_id, %{
         role: "assistant",
         content: if(final_text != "", do: final_text, else: "(sin respuesta)"),
@@ -55,6 +66,7 @@ defmodule SomaWeb.AgentSocket do
         tools: tools
       })
     end)
+
     {:push, {:text, Jason.encode!(%{type: "done"})}, state}
   end
 
@@ -71,6 +83,7 @@ defmodule SomaWeb.AgentSocket do
     if state[:agent_runner] do
       Soma.AgentRunner.stop(state.agent_runner)
     end
+
     :ok
   end
 

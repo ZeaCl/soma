@@ -18,10 +18,12 @@ defmodule Soma.Workspace do
 
   def ensure_org(org_id) do
     base = org_path(org_id)
+
     unless File.exists?(base) do
       File.mkdir_p!(base)
       init_git(base)
     end
+
     :ok
   end
 
@@ -42,6 +44,7 @@ defmodule Soma.Workspace do
   def list_files(owner_type, owner_id, org_id, sub_path \\ "") do
     base = workspace_base(owner_type, owner_id, org_id)
     dir = if sub_path == "", do: base, else: Path.join(base, sub_path)
+
     if File.dir?(dir) do
       {:ok, scan_dir(dir, dir, "")}
     else
@@ -82,13 +85,16 @@ defmodule Soma.Workspace do
         |> Enum.flat_map(fn name ->
           full = Path.join(dir, name)
           rel = if relative == "", do: name, else: Path.join(relative, name)
+
           if File.dir?(full) do
             [{rel, "dir", File.stat!(full).size}] ++ scan_dir(root, full, rel)
           else
             [{rel, "file", File.stat!(full).size, Path.extname(name)}]
           end
         end)
-      _ -> []
+
+      _ ->
+        []
     end
   end
 
@@ -135,7 +141,12 @@ defmodule Soma.Workspace do
     with {:ok, full_old} <- resolve(org_id, old_path),
          true <- File.exists?(full_old) do
       full_new = Path.join(Path.dirname(full_old), new_name)
-      new_relative = if Path.dirname(old_path) == ".", do: new_name, else: Path.join(Path.dirname(old_path), new_name)
+
+      new_relative =
+        if Path.dirname(old_path) == ".",
+          do: new_name,
+          else: Path.join(Path.dirname(old_path), new_name)
+
       File.rename!(full_old, full_new)
       git_commit(org_id, "rename: #{old_path} -> #{new_name}")
       {:ok, new_relative}
@@ -170,7 +181,9 @@ defmodule Soma.Workspace do
             {:ok, []} ->
               File.rmdir!(full)
               :ok
-            _ -> :directory_not_empty
+
+            _ ->
+              :directory_not_empty
           end
         else
           File.rm!(full)
@@ -181,6 +194,7 @@ defmodule Soma.Workspace do
         :ok ->
           git_commit(org_id, "delete: #{relative_path}")
           {:ok, relative_path}
+
         :directory_not_empty ->
           {:error, :directory_not_empty}
       end
@@ -193,10 +207,14 @@ defmodule Soma.Workspace do
 
   def history(org_id, relative_path) do
     base = org_path(org_id)
+
     case System.cmd("git", ["log", "--oneline", "-10", "--follow", "--", relative_path],
-                    cd: base, stderr_to_stdout: true) do
+           cd: base,
+           stderr_to_stdout: true
+         ) do
       {output, 0} ->
-        commits = output
+        commits =
+          output
           |> String.trim()
           |> String.split("\n")
           |> Enum.reject(&(&1 == ""))
@@ -204,26 +222,34 @@ defmodule Soma.Workspace do
             [hash | msg] = String.split(line, " ")
             %{hash: hash, message: Enum.join(msg, " ")}
           end)
+
         {:ok, commits}
-      {_, _} -> {:ok, []}
+
+      {_, _} ->
+        {:ok, []}
     end
   end
 
   def recover(org_id, relative_path, commit_hash) do
     base = org_path(org_id)
+
     case System.cmd("git", ["checkout", commit_hash, "--", relative_path],
-                    cd: base, stderr_to_stdout: true) do
+           cd: base,
+           stderr_to_stdout: true
+         ) do
       {_, 0} ->
         git_commit(org_id, "recover: #{relative_path} @ #{String.slice(commit_hash, 0, 7)}")
         {:ok, relative_path}
-      {error, _} -> {:error, error}
+
+      {error, _} ->
+        {:error, error}
     end
   end
 
   def push(org_id) do
     base = org_path(org_id)
-    case System.cmd("git", ["push", "origin", "main"],
-                    cd: base, stderr_to_stdout: true) do
+
+    case System.cmd("git", ["push", "origin", "main"], cd: base, stderr_to_stdout: true) do
       {output, 0} -> {:ok, String.slice(output, 0, 500)}
       {error, _} -> {:ok, :not_configured}
     end

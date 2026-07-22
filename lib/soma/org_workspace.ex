@@ -35,6 +35,7 @@ defmodule Soma.OrgWorkspace do
       _ = System.cmd("chgrp", [group, dir], stderr_to_stdout: true)
       File.chmod!(dir, 0o2770)
     end
+
     :ok
   end
 
@@ -47,6 +48,7 @@ defmodule Soma.OrgWorkspace do
       _ = System.cmd("chgrp", [group, dir], stderr_to_stdout: true)
       File.chmod!(dir, 0o2770)
     end
+
     :ok
   end
 
@@ -72,13 +74,16 @@ defmodule Soma.OrgWorkspace do
         |> Enum.flat_map(fn name ->
           full = Path.join(dir, name)
           rel = if relative == "", do: name, else: Path.join(relative, name)
+
           if File.dir?(full) do
             [{rel, "dir", File.stat!(full).size} | scan_dir(root, full, rel)]
           else
             [{rel, "file", File.stat!(full).size, Path.extname(name)}]
           end
         end)
-      _ -> []
+
+      _ ->
+        []
     end
   end
 
@@ -125,8 +130,12 @@ defmodule Soma.OrgWorkspace do
       result =
         if File.dir?(full) do
           case File.ls(full) do
-            {:ok, []} -> File.rmdir!(full); :ok
-            _ -> :directory_not_empty
+            {:ok, []} ->
+              File.rmdir!(full)
+              :ok
+
+            _ ->
+              :directory_not_empty
           end
         else
           File.rm!(full)

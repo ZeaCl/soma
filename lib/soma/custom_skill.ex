@@ -1,14 +1,16 @@
 defmodule Soma.CustomSkill do
   use Ecto.Schema
   import Ecto.Changeset
-  @derive {Jason.Encoder, only: [:id, :organization_id, :name, :content, :is_active, :inserted_at, :updated_at]}
+
+  @derive {Jason.Encoder,
+           only: [:id, :organization_id, :name, :content, :is_active, :inserted_at, :updated_at]}
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "custom_skills" do
-    field :organization_id, Ecto.UUID
-    field :name, :string
-    field :content, :string
-    field :is_active, :boolean, default: true
+    field(:organization_id, Ecto.UUID)
+    field(:name, :string)
+    field(:content, :string)
+    field(:is_active, :boolean, default: true)
     timestamps(type: :utc_datetime)
   end
 

@@ -31,6 +31,7 @@ defmodule Soma.UserSandbox do
         home = "/home/#{username}"
         uid = extract_uid_from_username(username)
         {:ok, uid, home}
+
       {output, code} ->
         {:error, "useradd failed (exit #{code}): #{String.slice(output, 0, 200)}"}
     end

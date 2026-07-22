@@ -4,7 +4,7 @@ defmodule Soma.SandboxTest do
   alias Soma.Sandbox
 
   @agent "00000000-0000-0000-0000-0000000000a1"
-  @org   "00000000-0000-0000-0000-000000000001"
+  @org "00000000-0000-0000-0000-000000000001"
 
   test "username generates correct Linux username" do
     # First 12 chars of agent ID + "soma-" prefix
@@ -16,9 +16,12 @@ defmodule Soma.SandboxTest do
   end
 
   test "create returns error when script missing" do
-    result = Sandbox.create(@agent, @org,
-      teams: "finanzas",
-      mounts: [%{source: "/tmp", dest: "shared"}])
+    result =
+      Sandbox.create(@agent, @org,
+        teams: "finanzas",
+        mounts: [%{source: "/tmp", dest: "shared"}]
+      )
+
     assert is_tuple(result)
   end
 

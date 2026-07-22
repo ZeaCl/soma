@@ -7,7 +7,9 @@ defmodule Soma.MixProject do
       version: "0.2.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      releases: [soma: [include_executables_for: [:unix], applications: [runtime_tools: :permanent]]],
+      releases: [
+        soma: [include_executables_for: [:unix], applications: [runtime_tools: :permanent]]
+      ],
       aliases: aliases(),
       deps: deps()
     ]

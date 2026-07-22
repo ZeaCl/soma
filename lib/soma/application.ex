@@ -8,6 +8,7 @@ defmodule Soma.Application do
       {Phoenix.PubSub, name: Soma.PubSub},
       SomaWeb.Endpoint
     ]
+
     opts = [strategy: :one_for_one, name: Soma.Supervisor]
     Supervisor.start_link(children, opts)
   end
