@@ -7,6 +7,7 @@ defmodule Soma.MixProject do
       version: "0.2.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       releases: [
         soma: [include_executables_for: [:unix], applications: [runtime_tools: :permanent]]
       ],
@@ -20,6 +21,9 @@ defmodule Soma.MixProject do
       ]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def application do
     [
