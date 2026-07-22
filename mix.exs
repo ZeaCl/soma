@@ -45,7 +45,8 @@ defmodule Soma.MixProject do
       {:corsica, "~> 2.1"},
       {:excoveralls, "~> 0.18", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false}
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:prom_ex, "~> 1.11"}
     ]
   end
 

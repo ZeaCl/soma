@@ -24,4 +24,16 @@ config :soma, :agent_host, System.get_env("AGENT_HOST", "http://zea-agent:3001")
 
 config :logger, level: :info
 
+config :soma, SomaWeb.Endpoint,
+  prom_ex: [
+    plugins: [
+      PromEx.Plugins.Ecto,
+      PromEx.Plugins.Phoenix,
+      PromEx.Plugins.Application,
+      PromEx.Plugins.BEAM,
+      Soma.AgentMetrics
+    ],
+    metrics_server: [port: 4021]
+  ]
+
 import_config "#{config_env()}.exs"
