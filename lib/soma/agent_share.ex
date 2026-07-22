@@ -1,4 +1,5 @@
 defmodule Soma.AgentShare do
+  @moduledoc "Schema para compartir agentes entre usuarios (Google Drive model)."
   use Ecto.Schema
   import Ecto.Changeset
 

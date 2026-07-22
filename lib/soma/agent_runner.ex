@@ -1,6 +1,12 @@
 defmodule Soma.AgentRunner do
+  @moduledoc """
+  AgentRunner — ejecuta pi --mode rpc como subproceso aislado por agente.
+  Cada agente corre como usuario Linux vía sudo -u soma-{id}.
+  """
   use GenServer
   require Logger
+
+  alias Soma.Sandbox
 
   @doc """
   Starts the AgentRunner for a specific agent and conversation.
@@ -28,8 +34,8 @@ defmodule Soma.AgentRunner do
     agent_id = Keyword.fetch!(opts, :agent_id)
     token = Keyword.fetch!(opts, :token)
 
-    username = Soma.Sandbox.username(agent_id)
-    home = Soma.Sandbox.home_dir(agent_id)
+    username = Sandbox.username(agent_id)
+    home = Sandbox.home_dir(agent_id)
 
     api_keys =
       [

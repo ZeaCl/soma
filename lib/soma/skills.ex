@@ -2,7 +2,8 @@ defmodule Soma.Skills do
   @moduledoc "Custom skills management + Thalamus sync."
 
   import Ecto.Query
-  alias Soma.{Repo, CustomSkill}
+  alias Soma.CustomSkill
+  alias Soma.Repo
 
   @builtin_dir System.get_env("SKILLS_DIR", "/root/.agents/skills")
   @custom_dir "/app/.pi-agent-skills"

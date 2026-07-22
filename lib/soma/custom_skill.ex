@@ -1,4 +1,5 @@
 defmodule Soma.CustomSkill do
+  @moduledoc "Custom skill schema — skills definidos por el usuario por organización."
   use Ecto.Schema
   import Ecto.Changeset
 

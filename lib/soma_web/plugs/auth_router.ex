@@ -1,4 +1,5 @@
 defmodule SomaWeb.Plugs.AuthRouter do
+  @moduledoc "Auth router — encadena JWTAuth → ApiKeyAuth → Guard → API controller."
   use Plug.Router
 
   plug(SomaWeb.Plugs.JWTAuth)

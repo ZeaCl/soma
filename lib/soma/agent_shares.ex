@@ -2,7 +2,8 @@ defmodule Soma.AgentShares do
   @moduledoc "Agent sharing — Google Drive model."
 
   import Ecto.Query
-  alias Soma.{Repo, AgentShare}
+  alias Soma.AgentShare
+  alias Soma.Repo
 
   def share(agent_id, shared_with_user_id, shared_by_user_id) do
     %AgentShare{}

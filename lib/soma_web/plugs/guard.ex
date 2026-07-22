@@ -1,5 +1,8 @@
 defmodule SomaWeb.Plugs.Guard do
+  @moduledoc "Auth guard — rechaza requests sin autenticación previa."
   import Plug.Conn
+
+  alias SomaWeb.Plugs.JWTAuth
 
   def init(opts), do: opts
 

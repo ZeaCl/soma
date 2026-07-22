@@ -1,6 +1,11 @@
 defmodule SomaWeb.AgentSocket do
+  @moduledoc "WebSocket handler para chat de agentes."
   @behaviour WebSock
   require Logger
+
+  alias Soma.AgentRunner
+  alias Soma.Conversations
+  alias SomaWeb.Plugs.JWTAuth
 
   @impl true
   def init(state) do
@@ -15,7 +20,7 @@ defmodule SomaWeb.AgentSocket do
 
       {:ok, %{"type" => "cancel"}} ->
         if state[:agent_runner] do
-          Soma.AgentRunner.abort(state.agent_runner)
+          AgentRunner.abort(state.agent_runner)
         end
 
         {:push, {:text, Jason.encode!(%{type: "cancelled"})}, state}
@@ -23,15 +28,15 @@ defmodule SomaWeb.AgentSocket do
       {:ok, %{"type" => "prompt", "text" => text}} ->
         if state[:agent_runner] do
           spawn(fn ->
-            Soma.Conversations.get_or_create(state.org_id, state.user_id, state.agent_id, "chat")
+            Conversations.get_or_create(state.org_id, state.user_id, state.agent_id, "chat")
 
-            Soma.Conversations.add_message(state.conv_id, %{
+            Conversations.add_message(state.conv_id, %{
               role: "user",
               content: text
             })
           end)
 
-          Soma.AgentRunner.send_prompt(state.agent_runner, text)
+          AgentRunner.send_prompt(state.agent_runner, text)
           {:ok, state}
         else
           {:push, {:text, Jason.encode!(%{type: "error", message: "Not initialized"})}, state}
@@ -59,7 +64,7 @@ defmodule SomaWeb.AgentSocket do
     spawn(fn ->
       tools = if Enum.empty?(final_tools), do: nil, else: final_tools
 
-      Soma.Conversations.add_message(state.conv_id, %{
+      Conversations.add_message(state.conv_id, %{
         role: "assistant",
         content: if(final_text != "", do: final_text, else: "(sin respuesta)"),
         thinking: if(final_thinking != "", do: final_thinking, else: nil),
@@ -81,18 +86,18 @@ defmodule SomaWeb.AgentSocket do
   @impl true
   def terminate(_reason, state) do
     if state[:agent_runner] do
-      Soma.AgentRunner.stop(state.agent_runner)
+      AgentRunner.stop(state.agent_runner)
     end
 
     :ok
   end
 
   defp handle_init(agent_id, conv_id, token, state) do
-    case SomaWeb.Plugs.JWTAuth.verify_token(token) do
+    case JWTAuth.verify_token(token) do
       {:ok, claims, org_id} ->
         Logger.info("AgentSocket: Init agent=#{agent_id} org=#{org_id}")
 
-        case Soma.AgentRunner.start_link(
+        case AgentRunner.start_link(
                caller: self(),
                agent_id: agent_id,
                token: token

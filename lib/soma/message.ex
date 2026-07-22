@@ -1,4 +1,5 @@
 defmodule Soma.Message do
+  @moduledoc "Message schema — mensaje individual en una conversación."
   use Ecto.Schema
   import Ecto.Changeset
 

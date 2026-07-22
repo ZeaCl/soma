@@ -1,4 +1,5 @@
 defmodule Soma.ApiKey do
+  @moduledoc "API key schema — zs_live_ tokens por organización."
   use Ecto.Schema
   import Ecto.Changeset
   import Ecto.Query

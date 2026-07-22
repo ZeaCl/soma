@@ -1,6 +1,9 @@
 defmodule Soma.Conversations do
+  @moduledoc "Conversation management — list, get, create, soft-delete."
   import Ecto.Query
-  alias Soma.{Repo, Conversation, Message}
+  alias Soma.Conversation
+  alias Soma.Message
+  alias Soma.Repo
 
   def list(org_id, user_id) do
     Repo.all(

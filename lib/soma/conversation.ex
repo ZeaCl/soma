@@ -1,4 +1,5 @@
 defmodule Soma.Conversation do
+  @moduledoc "Conversation schema — agrupa mensajes de un agente/usuario."
   use Ecto.Schema
   import Ecto.Changeset
 

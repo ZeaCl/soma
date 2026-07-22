@@ -1,4 +1,5 @@
 defmodule Soma.Application do
+  @moduledoc "Application entry point — inicia el supervisor con Endpoint."
   use Application
 
   @impl true

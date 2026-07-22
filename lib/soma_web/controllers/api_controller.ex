@@ -1,6 +1,14 @@
 defmodule SomaWeb.ApiController do
+  @moduledoc "REST API controller — conversations, files, skills, agents, sandboxes, api-keys."
   use Plug.Router
-  alias Soma.{Repo, ApiKey, Conversations, Workspace, Skills, UserSandbox, OrgWorkspace}
+  alias Soma.ApiKey
+  alias Soma.Conversations
+  alias Soma.OrgWorkspace
+  alias Soma.Repo
+  alias Soma.Skills
+  alias Soma.UserSandbox
+  alias Soma.Sandbox
+  alias Soma.Workspace
 
   plug(:match)
   plug(:dispatch)
@@ -325,7 +333,7 @@ defmodule SomaWeb.ApiController do
         end
 
       "agent" ->
-        case Soma.Sandbox.destroy(id) do
+        case Sandbox.destroy(id) do
           {:ok, _} -> send_resp(conn, 200, Jason.encode!(%{ok: true}))
           {:error, reason} -> send_resp(conn, 500, Jason.encode!(%{error: reason}))
         end
@@ -364,7 +372,7 @@ defmodule SomaWeb.ApiController do
     base =
       case owner_type do
         "user" -> UserSandbox.home_dir(owner_id)
-        "agent" -> Soma.Sandbox.home_dir(owner_id)
+        "agent" -> Sandbox.home_dir(owner_id)
         "org" -> OrgWorkspace.shared_dir(org_id)
         _ -> UserSandbox.home_dir(owner_id)
       end
@@ -405,7 +413,7 @@ defmodule SomaWeb.ApiController do
         agent_id = agent["id"]
 
         spawn(fn ->
-          case Soma.Sandbox.create(agent_id, org_id,
+          case Sandbox.create(agent_id, org_id,
                  teams: attrs["teams"] || "",
                  mounts: attrs["mounts"] || []
                ) do
@@ -451,7 +459,7 @@ defmodule SomaWeb.ApiController do
               end
 
               # Chown the config directory back to the sandbox user
-              username = Soma.Sandbox.username(agent_id)
+              username = Sandbox.username(agent_id)
               System.cmd("chown", ["-R", "#{username}:#{username}", Path.join([home, ".pi"])])
 
             {:error, reason} ->
@@ -585,14 +593,14 @@ defmodule SomaWeb.ApiController do
           end
 
         "agent" ->
-          case Soma.Sandbox.create(owner_id, org_id, teams: attrs["teams"]) do
+          case Sandbox.create(owner_id, org_id, teams: attrs["teams"]) do
             {:ok, uid, home} ->
               OrgWorkspace.ensure_shared(org_id)
 
               conn
               |> json(201, %{
                 ok: true,
-                username: Soma.Sandbox.username(owner_id),
+                username: Sandbox.username(owner_id),
                 uid: uid,
                 home: home
               })

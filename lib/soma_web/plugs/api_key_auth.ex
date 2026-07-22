@@ -2,7 +2,8 @@ defmodule SomaWeb.Plugs.ApiKeyAuth do
   @moduledoc "Validates API Key (zs_live_...) for programmatic access."
 
   import Plug.Conn
-  alias Soma.{Repo, ApiKey}
+  alias Soma.ApiKey
+  alias Soma.Repo
 
   def init(opts), do: opts
 

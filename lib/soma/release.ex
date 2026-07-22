@@ -1,4 +1,5 @@
 defmodule Soma.Release do
+  @moduledoc "Release tasks — migraciones de base de datos."
   @app :soma
 
   def migrate do
