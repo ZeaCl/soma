@@ -13,6 +13,12 @@ defmodule Soma.ThalamusClient do
   @callback get_jwks() :: {:ok, map()} | {:error, term()}
   @callback login(String.t(), String.t()) :: {:ok, map()} | {:error, term()}
 
+  @callback resolve_secret(
+              org_id :: String.t(),
+              user_id :: String.t(),
+              provider :: String.t()
+            ) :: {:ok, String.t()} | {:error, :not_found | term()}
+
   @doc """
   Devuelve el módulo cliente configurado (real o mock).
   """

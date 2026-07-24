@@ -9,6 +9,7 @@ defmodule SomaWeb.AgentSocket do
 
   @impl true
   def init(state) do
+    Process.flag(:trap_exit, true)
     {:ok, Map.put(state, :agent_runner, nil)}
   end
 
@@ -81,6 +82,11 @@ defmodule SomaWeb.AgentSocket do
   end
 
   @impl true
+  def handle_info({:EXIT, _pid, _reason}, state) do
+    {:ok, state}
+  end
+
+  @impl true
   def handle_info(_info, state), do: {:ok, state}
 
   @impl true
@@ -97,10 +103,14 @@ defmodule SomaWeb.AgentSocket do
       {:ok, claims, org_id} ->
         Logger.info("AgentSocket: Init agent=#{agent_id} org=#{org_id}")
 
+        user_id = strip_user_prefix(claims["sub"])
+
         case AgentRunner.start_link(
                caller: self(),
                agent_id: agent_id,
-               token: token
+               token: token,
+               org_id: org_id,
+               user_id: user_id
              ) do
           {:ok, pid} ->
             new_state =
@@ -109,9 +119,14 @@ defmodule SomaWeb.AgentSocket do
               |> Map.put(:agent_id, agent_id)
               |> Map.put(:conv_id, conv_id)
               |> Map.put(:org_id, org_id)
-              |> Map.put(:user_id, claims["sub"])
+              |> Map.put(:user_id, user_id)
 
             {:ok, new_state}
+
+          {:error, :no_ai_provider_configured} ->
+            # AgentRunner already sent the structured error via {:agent_event, ...}
+            # before stopping. Don't send a duplicate.
+            {:ok, state}
 
           {:error, reason} ->
             msg = %{type: "error", message: "Failed to start agent: #{inspect(reason)}"}
@@ -123,4 +138,7 @@ defmodule SomaWeb.AgentSocket do
         {:push, {:text, Jason.encode!(msg)}, state}
     end
   end
+
+  defp strip_user_prefix("user_" <> id), do: id
+  defp strip_user_prefix(id), do: id
 end

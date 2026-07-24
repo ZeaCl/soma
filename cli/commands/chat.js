@@ -63,6 +63,8 @@ export async function runChat(agentId, opts = {}) {
             break;
           case 'error':
             console.log(chalk.red(`\n❌ ${msg.message}`));
+            if (msg.code) console.log(chalk.yellow(`   [${msg.code}]`));
+            if (msg.fix) console.log(chalk.green(`\n💡 ${msg.fix}`));
             if (opts.prompt) ws.close();
             else showPrompt();
             break;

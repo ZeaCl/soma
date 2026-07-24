@@ -112,4 +112,24 @@ defmodule Soma.ThalamusClient.Real do
         {:error, inspect(reason)}
     end
   end
+
+  @impl true
+  def resolve_secret(org_id, user_id, provider) do
+    case Req.get("#{base_url()}/api/internal/secrets/resolve",
+           params: [provider: provider, org_id: org_id, user_id: user_id],
+           receive_timeout: 5000
+         ) do
+      {:ok, %{status: 200, body: %{"value" => value}}} ->
+        {:ok, value}
+
+      {:ok, %{status: 404}} ->
+        {:error, :not_found}
+
+      {:ok, %{status: code}} ->
+        {:error, "Thalamus returned #{code}"}
+
+      {:error, reason} ->
+        {:error, inspect(reason)}
+    end
+  end
 end

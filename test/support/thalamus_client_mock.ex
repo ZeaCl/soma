@@ -32,4 +32,8 @@ defmodule Soma.ThalamusClient.Mock do
   def get_jwks, do: get(:jwks, {:ok, %{"keys" => []}})
   @impl true
   def login(email, password), do: get({:login, email}, {:ok, %{"access_token" => "mock-token"}})
+
+  @impl true
+  def resolve_secret(_org_id, _user_id, provider),
+    do: get({:resolve_secret, provider}, {:error, :not_found})
 end
