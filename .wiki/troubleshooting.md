@@ -16,24 +16,7 @@ curl http://sudlich-soma.zea.localhost       # Debe devolver HTTP 200
 curl http://auth.zea.localhost/api/public/health  # Debe devolver HTTP 200
 ```
 
-### Capa 2: ¿El Pi Sidecar está corriendo?
-
-```bash
-docker logs zea_soma_local | grep "Agent RPC WebSocket"
-# Debe mostrar: 🚀 Agent RPC WebSocket + HTTP on ws://0.0.0.0:3002
-```
-
-### Capa 3: ¿El WebSocket está bien ruteado?
-
-El Caddy debe rutear `/agent-ws` → `soma:3002` (NO a `soma:4084`).
-
-```bash
-# Verificar en Caddyfile.local:
-grep -A5 "agent-ws" /Users/dev/Documents/zea/zea/Caddyfile.local
-# Debe mostrar: reverse_proxy soma:3002
-```
-
-### Capa 4: ¿pi CLI funciona?
+### Capa 2: ¿pi CLI funciona?
 
 ```bash
 docker exec zea_soma_local pi --version   # Debe devolver versión
@@ -45,7 +28,7 @@ echo 'di hola' | docker exec -i zea_soma_local pi --print --provider deepseek --
 # Debe responder con texto
 ```
 
-### Capa 5: ¿El agente tiene config?
+### Capa 3: ¿El agente tiene config?
 
 ```bash
 docker exec zea_soma_local cat /app/.pi/agent/settings.json
@@ -58,16 +41,21 @@ docker exec zea_soma_local mkdir -p /app/.pi/agent
 docker exec zea_soma_local bash -c 'echo "{\"defaultProvider\":\"deepseek\",\"defaultModel\":\"deepseek-v4-pro\",\"defaultThinkingLevel\":\"high\",\"theme\":\"dark\"}" > /app/.pi/agent/settings.json'
 ```
 
-### Capa 6: ¿El agente tiene API keys?
+### Capa 4: ¿El agente tiene API keys?
+
+Las API keys ya NO se leen de variables de entorno del contenedor. Soma usa `SecretProvider` para resolverlas desde Thalamus (`GET /api/internal/secrets/resolve`) por org y usuario.
 
 ```bash
-docker exec zea_soma_local printenv | grep DEEPSEEK_API_KEY
-# Debe mostrar: DEEPSEEK_API_KEY=sk-...
+# Verificar que Thalamus tiene secrets configurados:
+zea thalamus secret list
 ```
 
-Si no están, agregarlas al `.env` del compose y al servicio `soma` en `docker-compose.local.yml`.
+Si no hay secrets, crearlos:
+```bash
+zea thalamus secret create --name deepseek --provider deepseek --value <api-key>
+```
 
-### Capa 7: ¿El agente tiene skills?
+### Capa 5: ¿El agente tiene skills?
 
 ```bash
 docker exec zea_soma_local find /root/.agents/skills -name "SKILL.md"
@@ -76,33 +64,48 @@ docker exec zea_soma_local find /root/.agents/skills -name "SKILL.md"
 
 Si no hay skills, verificar que el Dockerfile tenga `COPY skill/ /root/.agents/skills/`.
 
-### Capa 8: ¿Los permisos son correctos?
+### Capa 6: ¿El WebSocket /agent-ws responde?
+
+El WebSocket lo maneja directamente Elixir vía `WebSockAdapter.upgrade`. **NO hay sidecar Node.js** — la arquitectura de dos procesos (Elixir API + Pi Sidecar) está deprecada.
+
+```bash
+# Test directo al endpoint de Elixir:
+wscat -c ws://soma.zea.localhost/agent-ws
+# Debe aceptar la conexión (aunque falle init sin token, no debe dar 502)
+```
+
+Si da 502, verificar logs de Elixir:
+```bash
+docker logs zea_soma_local | grep -E "AgentSocket|agent-ws|error"
+```
+
+### Capa 7: ¿Los permisos son correctos?
 
 ```bash
 docker exec zea_soma_local find /home/soma-*/.pi -ls
 # Los archivos deben ser owned por soma-XXX, NO por root
 ```
 
-Si son `root:root`, el `copyAgentAuth` no está haciendo chown. Ver commit `2c046bf`.
-
 ---
 
 ## 🔴 Problemas específicos y soluciones
 
-### 1. Caddy no rutea /agent-ws al sidecar
+### 1. 502 Bad Gateway en WebSocket /agent-ws
 
-- **Síntoma**: Chat no responde, WebSocket se conecta pero no hay eventos
-- **Causa**: Caddy rutea todo a soma:4084 (Elixir API), no a :3002 (Pi Sidecar)
+- **Síntoma**: `zea soma chat` o `wscat -c wss://soma.zea.cl/agent-ws` devuelve 502
+- **Causa más común**: La imagen de prod no está actualizada, o `WebSockAdapter.upgrade` está fallando
 - **Diagnóstico**:
   ```bash
-  grep "agent-ws" /Users/dev/Documents/zea/zea/Caddyfile.local
+  # Verificar que el endpoint responde (sin WebSocket):
+  curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" \
+    -H "Sec-WebSocket-Version: 13" \
+    -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+    https://soma.zea.cl/agent-ws
+  # Ver logs del contenedor:
+  docker logs zea_soma | grep -E "AgentSocket|error|crash"
   ```
-- **Solución**: Agregar ruteo específico en Caddyfile:
-  ```
-  @ws { path /agent-ws }
-  handle @ws { reverse_proxy soma:3002 }
-  ```
-- **Prevención**: Ver commit `fa977ee` en `ZeaCl/zea`
+- **Arquitectura actual**: Elixir (:4084) maneja REST + WebSocket. NO hay sidecar en :3002.
+- **Caddy en prod**: Todo rutea a `soma:4084`, sin ruteo especial para `/agent-ws`.
 
 ### 2. Redirect URI no persiste en Thalamus
 
@@ -160,28 +163,19 @@ Si son `root:root`, el `copyAgentAuth` no está haciendo chown. Ver commit `2c04
   ```
 - **Prevención**: Ver commit `fea6dcc` en `ZeaCl/soma`
 
-### 7. API keys LLM no configuradas
+### 7. API keys LLM no configuradas (SecretProvider)
 
-- **Síntoma**: pi no puede llamar a la API del proveedor LLM
-- **Causa**: `DEEPSEEK_API_KEY` no está en el entorno del contenedor
+- **Síntoma**: pi no puede llamar a la API del proveedor LLM, error `no_ai_provider_configured`
+- **Causa**: No hay secrets configurados en Thalamus para esta org
 - **Diagnóstico**:
   ```bash
-  docker exec zea_soma_local printenv | grep DEEPSEEK
+  zea thalamus secret list
   ```
-- **Solución**: Agregar `DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}` al environment del servicio `soma` en el compose
-- **Prevención**: Ver commit `fa977ee` en `ZeaCl/zea`
-
-### 8. copyAgentAuth no hace chown
-
-- **Síntoma**: `EACCES: permission denied, mkdir 'settings.json.lock'`
-- **Causa**: `copyAgentAuth` copia archivos como root pero pi corre como soma-XXX
-- **Diagnóstico**:
+- **Solución**: Crear el secret en Thalamus:
   ```bash
-  docker exec zea_soma_local find /home/soma-*/.pi -ls | head
-  # Si muestra root:root → problema confirmado
+  zea thalamus secret create --name deepseek --provider deepseek --value <api-key>
   ```
-- **Solución**: Agregar `chown` después de copiar en `agent-sandbox.ts`
-- **Prevención**: Ver commit `2c046bf` en `ZeaCl/soma`
+- **Flujo**: `AgentRunner` → `SecretProvider.resolve_secret(org_id, user_id, "deepseek")` → `ThalamusClient.resolve_secret/3` → `GET /api/internal/secrets/resolve`
 
 ---
 
@@ -209,12 +203,12 @@ Si son `root:root`, el `copyAgentAuth` no está haciendo chown. Ver commit `2c04
 
 - **Síntoma**: La skill `fund-management` está cargada pero `$ZEA_TOKEN` está vacío
 - **Flujo correcto**:
-  1. Frontend (useGlia) envía `token` en mensaje `init` del WebSocket
-  2. agent-rpc lo guarda en `process.env.ZEA_TOKEN`
-  3. rpc-bridge lo pasa como variable de entorno al subproceso pi
+  1. Frontend (useSoma/SomaChat) envía `token` en mensaje `init` del WebSocket
+  2. `AgentSocket.handle_init` verifica el JWT y pasa `token` al `AgentRunner`
+  3. `AgentRunner` incluye `ZEA_TOKEN` en las variables de entorno al spawnear `pi`
   4. pi puede usar `$ZEA_TOKEN` para llamar a fm_funds, fm_investors, etc.
 - **Diagnóstico**: Verificar logs de init: debe mostrar `🔑 ZEA_TOKEN: NNN chars`
-- **SDK requerido**: `@zea.cl/soma-sdk@0.1.3` o superior
+- **SDK requerido**: `@zea.cl/soma-sdk@0.2.0` o superior
 
 ---
 
@@ -235,4 +229,7 @@ echo " skills en /root/.agents/skills/"
 
 # Config de pi
 docker exec zea_soma_local cat /app/.pi/agent/settings.json 2>/dev/null || echo "Falta settings.json"
+
+# WebSocket health (debe aceptar conexión, no 502)
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" http://soma.zea.localhost/agent-ws 2>&1 | head -5
 ```

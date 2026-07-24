@@ -6,21 +6,17 @@
 
 ## ¿Qué es Soma?
 
-AgentHub multi-agente de ZEA. Provee chat con agentes IA, sandbox aislado por usuario Linux real, workspaces, skills, y orquestación de agentes. Dos procesos en el mismo contenedor:
+AgentHub multi-agente de ZEA. Provee chat con agentes IA, sandbox aislado por usuario Linux real, workspaces, skills, y orquestación de agentes. Un solo proceso Elixir que maneja todo:
 
 ```
 CONTENEDOR Soma (Alpine Linux)
-├── Pi Sidecar (:3002) — WebSocket chat agentes + HTTP API
-│   ├── agent-rpc.ts — orquestador (init → prepareAgent → bridge → prompt)
-│   ├── agent-sandbox.ts — ciclo de vida del sandbox (useradd/userdel)
-│   └── rpc-bridge.ts — stdin/stdout JSONL ↔ pi --mode rpc
-│
 ├── Elixir API (:4084) — Phoenix Plug.Router
-│   ├── Conversaciones + mensajes (PostgreSQL)
-│   ├── Workspace files (disco + sandbox Linux)
-│   ├── Skills CRUD
-│   ├── API Keys
-│   └── Agent shares (compartir agentes entre usuarios)
+│   ├── REST API (agentes, skills, archivos, conversaciones, API keys)
+│   ├── WebSocket /agent-ws → WebSockAdapter → AgentSocket → AgentRunner
+│   └── AgentRunner — GenServer que spawnea pi --mode rpc vía sudo
+│
+├── Pi CLI (subproceso por agente)
+│   └── pi --mode rpc --session-dir /home/<user>/.pi-sessions
 │
 └── Sandbox Layer (OS)
     └── /home/soma-{shortId}/ y /home/user-{shortId}/
@@ -43,7 +39,7 @@ docker build -t soma .
 
 # Run (necesita PostgreSQL disponible)
 docker run -d \
-  -p 4084:4084 -p 3002:3002 \
+  -p 4084:4084 \
   -e DATABASE_URL="ecto://postgres:postgres@host.docker.internal:5432/soma_prod" \
   -e SECRET_KEY_BASE="dev-secret-64-bytes-minimum-CHANGE-in-production-xxxxxxxxxx" \
   -e THALAMUS_URL="http://thalamus:4000" \
@@ -59,7 +55,7 @@ cd /Users/dev/Documents/zea/zea
 docker compose -f docker-compose.local.yml up -d --build soma
 ```
 
-⚠️ Soma aún NO está en el compose local — [Fase 0 en progreso].
+
 
 ### Opción C: Sin Docker (solo Elixir API, útil para debug)
 
@@ -70,7 +66,7 @@ mix ecto.create && mix ecto.migrate
 mix phx.server   # :4084
 ```
 
-El Pi Sidecar (WebSocket agentes) NO funciona sin Docker (necesita `sudo`, `useradd`, `pi` CLI).
+⚠️ Sin Docker no hay sandbox (necesita `sudo`, `useradd`, `pi` CLI). Solo útil para debug de endpoints REST.
 
 ---
 
@@ -92,7 +88,6 @@ El Pi Sidecar (WebSocket agentes) NO funciona sin Docker (necesita `sudo`, `user
 | `SECRET_KEY_BASE` | `dev-secret-CHANGE-ME...` | Firmado de cookies/tokens |
 | `PHX_HOST` | `soma.zea.localhost` | Host del endpoint |
 | `PORT` | `4084` | Puerto de la API Elixir |
-| `AGENT_RPC_PORT` | `3002` | Puerto del Pi Sidecar |
 | `THALAMUS_URL` | `http://thalamus:4000` | URL base de Thalamus |
 | `AGENT_HOST` | `http://zea-agent:3001` | Host interno de agentes |
 
@@ -142,8 +137,8 @@ docker exec -it zea_postgres_local psql -U postgres -d soma_prod
 
 | Capa | Tecnología |
 |---|---|
-| API | Elixir 1.18, Phoenix (Plug.Router), Ecto, PostgreSQL |
-| Sidecar | Node.js, TypeScript, `ws` (WebSocket), `pg` |
+| API | Elixir 1.18, Phoenix 1.8, Plug.Router, Ecto, PostgreSQL |
+| WebSocket | WebSockAdapter + Cowboy (manejado por Elixir, sin sidecar) |
 | Sandbox | Linux users (shadow/sudo), pi CLI (`@earendil-works/pi-coding-agent`) |
 | SDK | React 18/19, TypeScript, tsup |
 | CLI | Node.js |
@@ -175,12 +170,12 @@ Paquete npm público: `@zea.cl/soma-sdk@0.1.2`
 
 | Componente | Uso |
 |---|---|
-| `GliaChat` | Chat completo con agente IA (WebSocket) |
-| `GliaCopilot` | Botón flotante de chat |
-| `GliaConversationList` | Historial de conversaciones |
-| `GliaFileBrowser` | Navegador de archivos de workspace |
-| `GliaFileViewer` | Visor de archivos |
-| `GliaSkillEditor` | Editor de skills |
+| `SomaChat` | Chat completo con agente IA (WebSocket) |
+| `SomaCopilot` | Botón flotante de chat |
+| `SomaConversationList` | Historial de conversaciones |
+| `SomaFileBrowser` | Navegador de archivos de workspace |
+| `SomaFileViewer` | Visor de archivos |
+| `SomaSkillEditor` | Editor de skills |
 | `AgentSkillPanel` | Panel de skills de agente |
 | `SomaPanel` | Panel de navegación files/skills |
 | `SkillManager` | Gestor de skills |
@@ -191,12 +186,12 @@ Paquete npm público: `@zea.cl/soma-sdk@0.1.2`
 
 | Hook | Uso |
 |---|---|
-| `useGlia()` | WebSocket chat: send, cancel, messages, isStreaming |
-| `useGliaConversations()` | Listar conversaciones |
-| `useGliaFiles()` | Archivos de workspace |
-| `useGliaFileContent()` | Contenido de archivo |
-| `useGliaSkills()` | Skills management |
-| `useGliaAgents()` | Agent management |
+| `useSoma()` | WebSocket chat: send, cancel, messages, isStreaming |
+| `useSomaConversations()` | Listar conversaciones |
+| `useSomaFiles()` | Archivos de workspace |
+| `useSomaFileContent()` | Contenido de archivo |
+| `useSomaSkills()` | Skills management |
+| `useSomaAgents()` | Agent management |
 | `useUserWorkspace()` | Workspace de usuario |
 
 ### Build y publish
@@ -227,7 +222,7 @@ Soma incluye skills que los agentes usan para entender cómo interactuar:
 | 1 | Pi CLI no instalado → agentes no inician | `npm install -g @earendil-works/pi-coding-agent` dentro del contenedor |
 | 2 | Volumen `/home` persiste entre deploys pero usuarios Linux no | `start.sh` recrea usuarios desde homes existentes |
 | 3 | Skills vacías en pi-backend → `nil` skills | Fix en `c70491c`: fallback a array vacío |
-| 4 | `sudo -u` falla si el usuario no existe | `agent-sandbox.ts` crea el usuario vía `soma-agent-useradd` antes del bridge |
+| 4 | `sudo -u` falla si el usuario no existe | `start.sh` recrea usuarios desde homes persistentes; `AgentRunner` usa `soma-agent-useradd` |
 | 5 | Migraciones no corren automáticamente en prod | Ejecutar `bin/soma eval 'Soma.Release.migrate()'` manualmente |
 | 6 | SDK publica en npm público → requiere token `NPM_TOKEN` en CI | Configurado en `.github/workflows/publish-npm.yml` |
 | 7 | Hardcoded localhost URLs en algunos lugares | Fix en `de6c112`: cambiadas a dominio de producción `zea.cl` |
@@ -271,11 +266,3 @@ Soma incluye skills que los agentes usan para entender cómo interactuar:
 ## Issues activos
 
 **GitHub Project**: https://github.com/orgs/ZeaCl/projects/18
-
-| Fase | Estado |
-|---|---|
-| -1 — Documentación base | ⬜ Pendiente |
-| 0 — Infraestructura (compose) | ⬜ Pendiente |
-| 1 — SDK + piece GliaChat | ⬜ Pendiente |
-| 2 — Panel derecho con agentes | ⬜ Pendiente |
-| 3 — Workspace files + skills | ⬜ Pendiente |
