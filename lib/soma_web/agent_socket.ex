@@ -29,8 +29,6 @@ defmodule SomaWeb.AgentSocket do
       {:ok, %{"type" => "prompt", "text" => text}} ->
         if state[:agent_runner] do
           spawn(fn ->
-            Conversations.get_or_create(state.org_id, state.user_id, state.agent_id, "chat")
-
             Conversations.add_message(state.conv_id, %{
               role: "user",
               content: text
@@ -98,12 +96,16 @@ defmodule SomaWeb.AgentSocket do
     :ok
   end
 
-  defp handle_init(agent_id, conv_id, token, state) do
+  defp handle_init(agent_id, _conv_id, token, state) do
     case JWTAuth.verify_token(token) do
       {:ok, claims, org_id} ->
         Logger.info("AgentSocket: Init agent=#{agent_id} org=#{org_id}")
 
         user_id = strip_user_prefix(claims["sub"])
+
+        # Resolver la conversación real (UUID) — el cid del cliente puede ser
+        # un string arbitrario (ej. "cli-{timestamp}"), no un UUID válido para Ecto.
+        conversation = Conversations.get_or_create(org_id, user_id, agent_id, "chat")
 
         case AgentRunner.start_link(
                caller: self(),
@@ -117,7 +119,7 @@ defmodule SomaWeb.AgentSocket do
               state
               |> Map.put(:agent_runner, pid)
               |> Map.put(:agent_id, agent_id)
-              |> Map.put(:conv_id, conv_id)
+              |> Map.put(:conv_id, conversation.id)
               |> Map.put(:org_id, org_id)
               |> Map.put(:user_id, user_id)
 

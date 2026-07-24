@@ -1,6 +1,5 @@
 defmodule Soma.AgentMetrics do
   @moduledoc "Custom agent metrics for PromEx."
-  @namespace :soma
 
   use PromEx.Plugin
 
