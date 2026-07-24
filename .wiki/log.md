@@ -4,6 +4,15 @@ Bitácora cronológica de cambios. Formato: `## [YYYY-MM-DD] <tipo> | <descripci
 
 ---
 
+## [2026-07-24] docs | Limpieza doc Pi Sidecar deprecado + respuesta issue #110
+
+- **Issue**: #110 (zea soma chat da 502 en prod)
+- Eliminadas todas las referencias al Pi Sidecar en :3002 de `session-state.md`, `troubleshooting.md` y `AGENTS.md`
+- Arquitectura actual: Elixir maneja REST + WebSocket, sin sidecar Node.js
+- API keys ahora se resuelven vía `SecretProvider` desde Thalamus (no env vars)
+- Detectado `baseUrl` hardcodeado a localhost en sudlich-soma
+- `caddyfile.local` rutea `/agent-ws` a soma:4084 (ya no a :3002)
+
 ## [2026-07-13] feat | Integración completa Soma x Südlich
 
 **Proyecto**: https://github.com/orgs/ZeaCl/projects/18

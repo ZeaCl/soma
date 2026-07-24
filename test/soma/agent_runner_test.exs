@@ -5,32 +5,40 @@ defmodule Soma.AgentRunnerTest do
 
   @agent "test-agent-000000000001"
   @token "test-token"
+  @org_id "test-org-000000000001"
+  @user_id "test-user-000000000001"
 
   setup do
     Application.put_env(:soma, :shell, Soma.Shell.Mock)
     Application.put_env(:soma, :file_system, Soma.FileSystem.Mock)
+    Application.put_env(:soma, :secret_provider, Soma.SecretProvider.Mock)
     Soma.Shell.Mock.start_link(%{})
     Soma.FileSystem.Mock.start_link(%{})
 
     on_exit(fn ->
       Application.delete_env(:soma, :shell)
       Application.delete_env(:soma, :file_system)
+      Application.delete_env(:soma, :secret_provider)
     end)
 
     :ok
   end
 
+  defp default_opts do
+    [caller: self(), agent_id: @agent, token: @token, org_id: @org_id, user_id: @user_id]
+  end
+
   # ── API ──────────────────────────────────────────────────────────────
 
   test "start_link starts a GenServer and sends ready to caller" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert is_pid(pid)
     assert_receive {:agent_event, %{"type" => "ready"}}, 1000
     AgentRunner.stop(pid)
   end
 
   test "send_prompt and abort are cast to the GenServer" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
     # These cast operations should not crash the GenServer (even if port is mock)
@@ -46,7 +54,7 @@ defmodule Soma.AgentRunnerTest do
   # ── JSONL processing via port messages ───────────────────────────────
 
   test "processes JSONL text delta from port" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
     # Get the port ref from state
@@ -67,7 +75,7 @@ defmodule Soma.AgentRunnerTest do
   end
 
   test "processes thinking events from port" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
     state = :sys.get_state(pid)
@@ -84,13 +92,20 @@ defmodule Soma.AgentRunnerTest do
   end
 
   test "processes tool execution from port" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
     state = :sys.get_state(pid)
     port = state.port
 
-    jsonl = Jason.encode!(%{type: "tool_execution_start", toolName: "bash", args: "ls"}) <> "\n"
+    # Simulate pi stdout via JSONL
+    jsonl =
+      Jason.encode!(%{
+        type: "tool_execution_start",
+        toolName: "bash",
+        args: "ls"
+      }) <> "\n"
+
     send(pid, {port, {:data, jsonl}})
     assert_receive {:agent_event, %{"type" => "tool", "name" => "bash", "input" => "ls"}}, 500
 
@@ -98,7 +113,7 @@ defmodule Soma.AgentRunnerTest do
   end
 
   test "processes agent_end done from port" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
     state = :sys.get_state(pid)
@@ -123,7 +138,7 @@ defmodule Soma.AgentRunnerTest do
   end
 
   test "handles port exit" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
     state = :sys.get_state(pid)
@@ -139,7 +154,7 @@ defmodule Soma.AgentRunnerTest do
   end
 
   test "accumulates text across multiple deltas" do
-    {:ok, pid} = AgentRunner.start_link(caller: self(), agent_id: @agent, token: @token)
+    {:ok, pid} = AgentRunner.start_link(default_opts())
     assert_receive {:agent_event, %{"type" => "ready"}}, 500
 
     state = :sys.get_state(pid)
@@ -168,5 +183,24 @@ defmodule Soma.AgentRunnerTest do
     assert final_state.current_text == "Hello World"
 
     AgentRunner.stop(pid)
+  end
+
+  # ── No provider configured ──────────────────────────────────────────
+
+  test "sends structured error when no providers configured" do
+    Application.put_env(:soma, :secret_provider, Soma.SecretProvider.Noop)
+
+    on_exit(fn ->
+      Application.put_env(:soma, :secret_provider, Soma.SecretProvider.Mock)
+    end)
+
+    result = AgentRunner.start_link(default_opts())
+    assert {:error, :no_ai_provider_configured} = result
+
+    assert_receive {:agent_event, error}, 500
+    assert error["type"] == "error"
+    assert error["code"] == "no_ai_provider_configured"
+    assert error["fix"] =~ "thalamus secret create"
+    assert error["providers"] == ["deepseek", "openai", "anthropic"]
   end
 end

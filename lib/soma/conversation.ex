@@ -3,6 +3,8 @@ defmodule Soma.Conversation do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @derive {Jason.Encoder, only: [:id, :organization_id, :user_id, :agent_id, :app_context, :title, :last_message_at, :message_count, :inserted_at, :updated_at]}
+
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "conversations" do
     field(:organization_id, Ecto.UUID)

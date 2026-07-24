@@ -19,6 +19,12 @@ defmodule Soma.AgentRunner do
     GenServer.start_link(__MODULE__, opts)
   end
 
+  @supported_providers %{
+    "deepseek" => "DEEPSEEK_API_KEY",
+    "openai" => "OPENAI_API_KEY",
+    "anthropic" => "ANTHROPIC_API_KEY"
+  }
+
   def send_prompt(pid, text) do
     GenServer.cast(pid, {:prompt, text})
   end
@@ -36,79 +42,97 @@ defmodule Soma.AgentRunner do
     caller = Keyword.fetch!(opts, :caller)
     agent_id = Keyword.fetch!(opts, :agent_id)
     token = Keyword.fetch!(opts, :token)
+    org_id = Keyword.fetch!(opts, :org_id)
+    user_id = Keyword.fetch!(opts, :user_id)
 
     username = Sandbox.username(agent_id)
     home = Sandbox.home_dir(agent_id)
 
     Soma.AgentMetrics.session_started(agent_id, "pi")
 
-    api_keys =
-      [
-        {"ZEA_TOKEN", token},
-        {"DEEPSEEK_API_KEY", System.get_env("DEEPSEEK_API_KEY")},
-        {"ANTHROPIC_API_KEY", System.get_env("ANTHROPIC_API_KEY")},
-        {"OPENAI_API_KEY", System.get_env("OPENAI_API_KEY")}
-      ]
-      |> Enum.filter(fn {_, v} -> v != nil and v != "" end)
-      |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
-      |> Enum.join(" ")
+    secret_provider = Application.get_env(:soma, :secret_provider, Soma.SecretProvider.Thalamus)
 
-    # Read local config if exists
-    config_path = Path.join([home, ".pi", "agent", "config.json"])
-    pi_args = ["--mode", "rpc", "--session-dir", "#{home}/.pi-sessions"]
+    {env_vars, available_providers} =
+      resolve_provider_envs(secret_provider, org_id, user_id)
 
-    pi_args =
-      case fs().read(config_path) do
-        {:ok, content} ->
-          case Jason.decode(content) do
-            {:ok, config} ->
-              args = pi_args
+    if available_providers == [] do
+      error = %{
+        "type" => "error",
+        "code" => "no_ai_provider_configured",
+        "message" => "Esta organización no tiene un proveedor IA configurado.",
+        "fix" =>
+          "zea thalamus secret create --name <nombre> --provider <provider> --value <api-key>",
+        "providers" => Map.keys(@supported_providers)
+      }
 
-              args =
-                if config["system_prompt"],
-                  do: args ++ ["--system-prompt", config["system_prompt"]],
-                  else: args
+      send(caller, {:agent_event, error})
+      {:stop, :no_ai_provider_configured}
+    else
+      api_keys =
+        [{"ZEA_TOKEN", token} | env_vars]
+        |> Enum.filter(fn {_, v} -> v != nil and v != "" end)
+        |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
+        |> Enum.join(" ")
 
-              args =
-                if config["provider"], do: args ++ ["--provider", config["provider"]], else: args
+      # Read local config if exists
+      config_path = Path.join([home, ".pi", "agent", "config.json"])
+      pi_args = ["--mode", "rpc", "--session-dir", "#{home}/.pi-sessions"]
 
-              args = if config["model"], do: args ++ ["--model", config["model"]], else: args
-              args
+      pi_args =
+        case fs().read(config_path) do
+          {:ok, content} ->
+            case Jason.decode(content) do
+              {:ok, config} ->
+                args = pi_args
 
-            _ ->
-              pi_args
-          end
+                args =
+                  if config["system_prompt"],
+                    do: args ++ ["--system-prompt", config["system_prompt"]],
+                    else: args
 
-        _ ->
-          pi_args
-      end
+                args =
+                  if config["provider"],
+                    do: args ++ ["--provider", config["provider"]],
+                    else: args
 
-    pi_cmd = "#{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
-    args = ["-u", username, "bash", "-c", pi_cmd]
+                args = if config["model"], do: args ++ ["--model", config["model"]], else: args
+                args
 
-    Logger.info("AgentRunner: sudo #{Enum.join(args, " ")}")
+              _ ->
+                pi_args
+            end
 
-    port =
-      shell().spawn_port(
-        {:spawn_executable, System.find_executable("sudo")},
-        [:binary, :stream, :use_stdio, :exit_status, args: args]
-      )
+          _ ->
+            pi_args
+        end
 
-    send(caller, {:agent_event, %{"type" => "ready"}})
+      pi_cmd = "#{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
+      args = ["-u", username, "bash", "-c", pi_cmd]
 
-    {:ok,
-     %{
-       port: port,
-       caller: caller,
-       agent_id: agent_id,
-       buffer: "",
-       in_thinking: false,
-       current_text: "",
-       current_thinking: "",
-       current_tools: [],
-       prompt_start: nil,
-       thinking_start: nil
-     }}
+      Logger.info("AgentRunner: sudo #{Enum.join(args, " ")}")
+
+      port =
+        shell().spawn_port(
+          {:spawn_executable, System.find_executable("sudo")},
+          [:binary, :stream, :use_stdio, :exit_status, args: args]
+        )
+
+      send(caller, {:agent_event, %{"type" => "ready"}})
+
+      {:ok,
+       %{
+         port: port,
+         caller: caller,
+         agent_id: agent_id,
+         buffer: "",
+         in_thinking: false,
+         current_text: "",
+         current_thinking: "",
+         current_tools: [],
+         prompt_start: nil,
+         thinking_start: nil
+       }}
+    end
   end
 
   @impl true
@@ -269,4 +293,13 @@ defmodule Soma.AgentRunner do
   end
 
   defp handle_delta(_, state), do: state
+
+  defp resolve_provider_envs(provider_mod, org_id, user_id) do
+    Enum.reduce(@supported_providers, {[], []}, fn {provider, env_var}, {vars, available} ->
+      case provider_mod.resolve_secret(org_id, user_id, provider) do
+        {:ok, key} -> {[{env_var, key} | vars], [provider | available]}
+        {:error, _} -> {vars, available}
+      end
+    end)
+  end
 end

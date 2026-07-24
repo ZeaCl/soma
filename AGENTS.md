@@ -1,6 +1,6 @@
 # AGENTS.md — Soma AgentHub
 
-Multi-agent chat, skills, workspaces & sandboxed execution. Elixir API + Node.js Pi Sidecar + React SDK.
+Multi-agent chat, skills, workspaces & sandboxed execution. Elixir API + React SDK.
 
 ---
 
@@ -53,7 +53,7 @@ docker build -t soma .
 
 # Run (necesita PostgreSQL)
 docker run -d \
-  -p 4084:4084 -p 3002:3002 \
+  -p 4084:4084 \
   -e DATABASE_URL="ecto://postgres:postgres@host.docker.internal:5432/soma_prod" \
   -e SECRET_KEY_BASE="dev-secret-64-bytes-minimum" \
   -e THALAMUS_URL="http://thalamus:4000" \
@@ -73,7 +73,7 @@ mix ecto.create && mix ecto.migrate
 mix phx.server   # :4084
 ```
 
-⚠️ El Pi Sidecar (WebSocket agentes) no funciona sin Docker — necesita `sudo`, `useradd`, `pi` CLI.
+⚠️ Sin Docker no hay sandbox (necesita `sudo`, `useradd`, `pi` CLI). Solo útil para debug de endpoints REST.
 
 ### SDK
 
@@ -126,9 +126,8 @@ Incluir `Closes #N` si cierra un issue.
 - Usar `Plug.Router`, no Phoenix completo
 - Autenticación en plugs: `jwt_auth.ex` + `api_key_auth.ex`
 
-### TypeScript (Sidecar + SDK)
+### TypeScript (SDK)
 
-- Sidecar: Node.js con `tsx` para ejecución
 - SDK: tsup para build (CJS + ESM + tipos)
 - Sin dependencias de UI externas en el SDK
 
@@ -146,7 +145,7 @@ Incluir `Closes #N` si cierra un issue.
 | Capa | Tecnología |
 |---|---|
 | API | Elixir 1.18, Phoenix (Plug.Router), Ecto, PostgreSQL |
-| Sidecar | Node.js, TypeScript, `ws` (WebSocket), `pg` |
+| WebSocket | WebSockAdapter + Cowboy (manejado por Elixir) |
 | Sandbox | Linux users (shadow/sudo), pi CLI |
 | SDK | React 18/19, TypeScript, tsup |
 | CLI | Node.js |
@@ -162,7 +161,7 @@ Incluir `Closes #N` si cierra un issue.
 - ❌ No asumir que Thalamus siempre responde — fallback a array vacío
 - ❌ No modificar el SDK sin rebuild + publish
 - ❌ No pushear a `main` directamente — siempre vía PR
-- ❌ No exponer el Pi Sidecar sin autenticación
+- ❌ No hardcodear `localhost` como baseUrl en el SDK — usar prop `baseUrl` dinámico
 
 ---
 

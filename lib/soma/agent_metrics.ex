@@ -1,6 +1,5 @@
 defmodule Soma.AgentMetrics do
   @moduledoc "Custom agent metrics for PromEx."
-  @namespace :soma
 
   use PromEx.Plugin
 
@@ -83,11 +82,11 @@ defmodule Soma.AgentMetrics do
         )
       ),
       Event.build(
-        :soma_sidecar_pi_status,
+        :soma_agent_runner_status,
         :telemetry_metrics.last_value(
-          name: [:soma, :sidecar, :pi, :status],
-          event_name: [:soma, :sidecar, :status],
-          description: "Pi Sidecar status (1=UP, 0=DOWN)"
+          name: [:soma, :agent_runner, :status],
+          event_name: [:soma, :agent_runner, :status],
+          description: "Agent Runner status (1=UP, 0=DOWN)"
         )
       )
     ]
@@ -137,7 +136,7 @@ defmodule Soma.AgentMetrics do
     :telemetry.execute([:soma, :skill, :execute], %{}, %{skill_name: skill_name})
   end
 
-  def sidecar_status(up?) do
-    :telemetry.execute([:soma, :sidecar, :status], %{}, %{status: if(up?, do: 1, else: 0)})
+  def agent_runner_status(up?) do
+    :telemetry.execute([:soma, :agent_runner, :status], %{}, %{status: if(up?, do: 1, else: 0)})
   end
 end
