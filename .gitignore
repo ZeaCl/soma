@@ -5,3 +5,4 @@ deps/
 erl_crash.dump
 node_modules/
 cover/
+priv/plts

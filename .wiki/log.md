@@ -4,6 +4,16 @@ Bitácora cronológica de cambios. Formato: `## [YYYY-MM-DD] <tipo> | <descripci
 
 ---
 
+## [2026-07-25] fix | AgentRunner auto-crea sandbox + FORMATTER CRASH fix
+
+- **Issues**: #110 (zea soma chat da 502), #120 (AgentRunner no crea sandbox automáticamente)
+- **Diagnóstico**: Probada la CLI `zea soma` contra producción. Health ✅, agent list ✅, skill list ✅, chat ❌ (sudo: unknown user).
+- **Causa raíz**: `AgentRunner.init/1` no creaba el sandbox antes de ejecutar `sudo -u`. Solo `soma-user_48d3eef` tenía sandbox de deploys anteriores.
+- **Fix agent_runner.ex**: Se agregó `Sandbox.create(agent_id, org_id)` al inicio de `init/1`. El script es idempotente.
+- **Fix log_formatter.ex**: Se agregaron cláusulas para `{:string, iodata}` y `{format_str, format_args}` que causaban `FORMATTER CRASH` en logs.
+- **Workaround CLI**: `zea soma sandbox create <agent-id> --org <org-id> --type agent` + `zea soma chat <agent-id> -p "..."` → funciona.
+- **Config**: `zea config set-env prod` + `zea thalamus login --device` para autenticar la CLI contra producción.
+
 ## [2026-07-24] docs | Limpieza doc Pi Sidecar deprecado + respuesta issue #110
 
 - **Issue**: #110 (zea soma chat da 502 en prod)

@@ -27,6 +27,7 @@ defmodule SomaWeb.Plugs.JWTAuth do
     end
   end
 
+  @spec verify_token(String.t()) :: {:ok, map(), String.t()} | {:error, term()}
   def verify_token(token) do
     case validate_jwt(token) do
       {:ok, claims} ->

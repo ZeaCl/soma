@@ -222,10 +222,11 @@ Soma incluye skills que los agentes usan para entender cómo interactuar:
 | 1 | Pi CLI no instalado → agentes no inician | `npm install -g @earendil-works/pi-coding-agent` dentro del contenedor |
 | 2 | Volumen `/home` persiste entre deploys pero usuarios Linux no | `start.sh` recrea usuarios desde homes existentes |
 | 3 | Skills vacías en pi-backend → `nil` skills | Fix en `c70491c`: fallback a array vacío |
-| 4 | `sudo -u` falla si el usuario no existe | `start.sh` recrea usuarios desde homes persistentes; `AgentRunner` usa `soma-agent-useradd` |
+| 4 | `sudo -u` falla si el usuario no existe | `AgentRunner.init` ahora crea el sandbox automáticamente (fix #120). Workaround: `zea soma sandbox create <id> --org <org-id> --type agent` |
 | 5 | Migraciones no corren automáticamente en prod | Ejecutar `bin/soma eval 'Soma.Release.migrate()'` manualmente |
 | 6 | SDK publica en npm público → requiere token `NPM_TOKEN` en CI | Configurado en `.github/workflows/publish-npm.yml` |
 | 7 | Hardcoded localhost URLs en algunos lugares | Fix en `de6c112`: cambiadas a dominio de producción `zea.cl` |
+| 8 | FORMATTER CRASH en logs (Phoenix `{:string, iodata}` no manejado) | Fix en `log_formatter.ex` (#120): cláusulas para `{:string, iodata}` y `{format, args}` |
 
 ---
 
