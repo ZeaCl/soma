@@ -60,6 +60,16 @@ jobs:
         run: mix sobelow --config
         continue-on-error: true
 
+      - name: Restore Dialyzer PLT cache
+        uses: actions/cache@v4
+        with:
+          path: priv/plts
+          key: ${{ runner.os }}-dialyzer-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-dialyzer-
+
+      - name: Dialyzer (static type analysis)
+        run: mix dialyzer
+
       - name: Run tests with coverage
         run: mix coveralls.json
         env:

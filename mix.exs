@@ -11,6 +11,10 @@ defmodule Soma.MixProject do
       releases: [
         soma: [include_executables_for: [:unix], applications: [runtime_tools: :permanent]]
       ],
+      dialyzer: [
+        plt_core_path: "priv/plts",
+        plt_file: {:no_warn, "priv/plts/dialyzer.plt"}
+      ],
       aliases: aliases(),
       deps: deps(),
       test_coverage: [tool: ExCoveralls, summary: [threshold: 0]],
@@ -50,7 +54,8 @@ defmodule Soma.MixProject do
       {:opentelemetry, "~> 1.4"},
       {:opentelemetry_api, "~> 1.3"},
       {:opentelemetry_ecto, "~> 1.2"},
-      {:opentelemetry_exporter, "~> 1.7"}
+      {:opentelemetry_exporter, "~> 1.7"},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -59,9 +64,11 @@ defmodule Soma.MixProject do
       precommit: [
         "format --check-formatted",
         "compile --warnings-as-errors",
+        "deps.unlock --check-unused",
         "coveralls.json",
         "cmd ./doctor-soma.sh"
-      ]
+      ],
+      dialyzer: ["deps.compile", "dialyzer"]
     ]
   end
 end
