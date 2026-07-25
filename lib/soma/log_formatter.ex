@@ -20,8 +20,23 @@ defmodule Soma.LogFormatter do
   end
 
   def format(level, msg, ts, md) do
+    ts_formatted =
+      cond do
+        is_struct(ts, DateTime) ->
+          Calendar.strftime(ts, "%Y-%m-%dT%H:%M:%S.%fZ")
+
+        is_integer(ts) ->
+          # Elixir 1.18+: Logger.Formatter passes system_time in microseconds
+          ts
+          |> DateTime.from_unix!(:microsecond)
+          |> Calendar.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+        true ->
+          to_string(ts)
+      end
+
     Jason.encode!(%{
-      timestamp: Calendar.strftime(ts, "%Y-%m-%dT%H:%M:%S.%fZ"),
+      timestamp: ts_formatted,
       level: level,
       message: to_string(msg),
       agent_id: md[:agent_id],
