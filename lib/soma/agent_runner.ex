@@ -7,6 +7,7 @@ defmodule Soma.AgentRunner do
   require Logger
 
   alias Soma.Sandbox
+  alias Soma.AIProvider
 
   defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
   defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
@@ -18,12 +19,6 @@ defmodule Soma.AgentRunner do
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
   end
-
-  @supported_providers %{
-    "deepseek" => "DEEPSEEK_API_KEY",
-    "openai" => "OPENAI_API_KEY",
-    "anthropic" => "ANTHROPIC_API_KEY"
-  }
 
   def send_prompt(pid, text) do
     GenServer.cast(pid, {:prompt, text})
@@ -62,7 +57,7 @@ defmodule Soma.AgentRunner do
         "message" => "Esta organización no tiene un proveedor IA configurado.",
         "fix" =>
           "zea thalamus secret create --name <nombre> --provider <provider> --value <api-key>",
-        "providers" => Map.keys(@supported_providers)
+        "providers" => AIProvider.supported() |> Enum.map(&AIProvider.to_query_param/1)
       }
 
       send(caller, {:agent_event, error})
@@ -295,9 +290,11 @@ defmodule Soma.AgentRunner do
   defp handle_delta(_, state), do: state
 
   defp resolve_provider_envs(provider_mod, org_id, user_id) do
-    Enum.reduce(@supported_providers, {[], []}, fn {provider, env_var}, {vars, available} ->
-      case provider_mod.resolve_secret(org_id, user_id, provider) do
-        {:ok, key} -> {[{env_var, key} | vars], [provider | available]}
+    Enum.reduce(AIProvider.supported(), {[], []}, fn provider, {vars, available} ->
+      query = AIProvider.to_query_param(provider)
+
+      case provider_mod.resolve_secret(org_id, user_id, query) do
+        {:ok, key} -> {[{AIProvider.to_env_var(provider), key} | vars], [query | available]}
         {:error, _} -> {vars, available}
       end
     end)
