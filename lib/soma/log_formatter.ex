@@ -31,6 +31,17 @@ defmodule Soma.LogFormatter do
           |> DateTime.from_unix!(:microsecond)
           |> Calendar.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
+        is_tuple(ts) and tuple_size(ts) == 2 ->
+          # Erlang-style timestamp: {{YYYY, MM, DD}, {HH, MM, SS, µs}}
+          {{y, m, d}, {hh, mm, ss, us}} = ts
+          month = String.pad_leading(Integer.to_string(m), 2, "0")
+          day = String.pad_leading(Integer.to_string(d), 2, "0")
+          hour = String.pad_leading(Integer.to_string(hh), 2, "0")
+          min = String.pad_leading(Integer.to_string(mm), 2, "0")
+          sec = String.pad_leading(Integer.to_string(ss), 2, "0")
+          usec = String.pad_leading(Integer.to_string(div(us, 1)), 6, "0")
+          "#{y}-#{month}-#{day}T#{hour}:#{min}:#{sec}.#{usec}Z"
+
         true ->
           to_string(ts)
       end
