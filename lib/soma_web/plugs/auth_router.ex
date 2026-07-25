@@ -15,20 +15,12 @@ defmodule SomaWeb.Plugs.AuthRouter do
   # ── API Keys ──
   forward("/api-keys", to: SomaWeb.ApiKeyController)
 
-  # ── Files ──
-  forward("/files", to: SomaWeb.FileController)
-  forward("/files/content", to: SomaWeb.FileController)
-  forward("/files/upload", to: SomaWeb.FileController)
-  forward("/files/mkdir", to: SomaWeb.FileController)
-  forward("/files/rename", to: SomaWeb.FileController)
-  forward("/files/move", to: SomaWeb.FileController)
-  forward("/files/history", to: SomaWeb.FileController)
-  forward("/files/recover", to: SomaWeb.FileController)
-  forward("/files/push", to: SomaWeb.FileController)
-
-  # ── Files (unified) ──
+  # ── Files (unified) — DEBE ir ANTES de /files genérico ──
   forward("/files/unified", to: SomaWeb.SandboxController)
   forward("/files/unified/upload", to: SomaWeb.SandboxController)
+
+  # ── Files ──
+  forward("/files", to: SomaWeb.FileController)
 
   # ── Skills ──
   forward("/skills", to: SomaWeb.SkillController)

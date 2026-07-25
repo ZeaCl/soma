@@ -31,6 +31,11 @@ defmodule SomaWeb.SandboxController do
     do_create_sandbox(conn, conn.params)
   end
 
+  # POST /api/sandboxes — usado por Sudlich para crear sandbox al login
+  post "/" do
+    do_create_sandbox(conn, conn.body_params)
+  end
+
   delete "/:id" do
     type = conn.params["type"] || "user"
 
