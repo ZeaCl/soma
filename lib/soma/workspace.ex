@@ -90,9 +90,11 @@ defmodule Soma.Workspace do
           rel = if relative == "", do: name, else: Path.join(relative, name)
 
           if fs().dir?(full) do
-            [{rel, "dir", fs().stat(full).size}] ++ scan_dir(root, full, rel)
+            {:ok, stat} = fs().stat(full)
+            [{rel, "dir", stat.size}] ++ scan_dir(root, full, rel)
           else
-            [{rel, "file", fs().stat(full).size, Path.extname(name)}]
+            {:ok, stat} = fs().stat(full)
+            [{rel, "file", stat.size, Path.extname(name)}]
           end
         end)
 
