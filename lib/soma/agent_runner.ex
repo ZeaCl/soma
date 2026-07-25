@@ -40,93 +40,107 @@ defmodule Soma.AgentRunner do
     org_id = Keyword.fetch!(opts, :org_id)
     user_id = Keyword.fetch!(opts, :user_id)
 
-    username = Sandbox.username(agent_id)
-    home = Sandbox.home_dir(agent_id)
+    # Ensure sandbox exists before running the agent (idempotent)
+    with {:ok, _uid, _home} <- Sandbox.create(agent_id, org_id) do
+      username = Sandbox.username(agent_id)
+      home = Sandbox.home_dir(agent_id)
 
-    Soma.AgentMetrics.session_started(agent_id, "pi")
+      Soma.AgentMetrics.session_started(agent_id, "pi")
 
-    secret_provider = Application.get_env(:soma, :secret_provider, Soma.SecretProvider.Thalamus)
+      secret_provider = Application.get_env(:soma, :secret_provider, Soma.SecretProvider.Thalamus)
 
-    {env_vars, available_providers} =
-      resolve_provider_envs(secret_provider, org_id, user_id)
+      {env_vars, available_providers} =
+        resolve_provider_envs(secret_provider, org_id, user_id)
 
-    if available_providers == [] do
-      error = %{
-        "type" => "error",
-        "code" => "no_ai_provider_configured",
-        "message" => "Esta organización no tiene un proveedor IA configurado.",
-        "fix" =>
-          "zea thalamus secret create --name <nombre> --provider <provider> --value <api-key>",
-        "providers" => AIProvider.supported() |> Enum.map(&AIProvider.to_query_param/1)
-      }
+      if available_providers == [] do
+        error = %{
+          "type" => "error",
+          "code" => "no_ai_provider_configured",
+          "message" => "Esta organización no tiene un proveedor IA configurado.",
+          "fix" =>
+            "zea thalamus secret create --name <nombre> --provider <provider> --value <api-key>",
+          "providers" => AIProvider.supported() |> Enum.map(&AIProvider.to_query_param/1)
+        }
 
-      send(caller, {:agent_event, error})
-      {:stop, :no_ai_provider_configured}
+        send(caller, {:agent_event, error})
+        {:stop, :no_ai_provider_configured}
+      else
+        api_keys =
+          [{"ZEA_TOKEN", token} | env_vars]
+          |> Enum.filter(fn {_, v} -> v != nil and v != "" end)
+          |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
+          |> Enum.join(" ")
+
+        # Read local config if exists
+        config_path = Path.join([home, ".pi", "agent", "config.json"])
+        pi_args = ["--mode", "rpc", "--session-dir", "#{home}/.pi-sessions"]
+
+        pi_args =
+          case fs().read(config_path) do
+            {:ok, content} ->
+              case Jason.decode(content) do
+                {:ok, config} ->
+                  args = pi_args
+
+                  args =
+                    if config["system_prompt"],
+                      do: args ++ ["--system-prompt", config["system_prompt"]],
+                      else: args
+
+                  args =
+                    if config["provider"],
+                      do: args ++ ["--provider", config["provider"]],
+                      else: args
+
+                  args = if config["model"], do: args ++ ["--model", config["model"]], else: args
+                  args
+
+                _ ->
+                  pi_args
+              end
+
+            _ ->
+              pi_args
+          end
+
+        pi_cmd = "#{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
+        args = ["-u", username, "bash", "-c", pi_cmd]
+
+        Logger.info("AgentRunner: sudo #{Enum.join(args, " ")}")
+
+        port =
+          shell().spawn_port(
+            {:spawn_executable, System.find_executable("sudo")},
+            [:binary, :stream, :use_stdio, :exit_status, args: args]
+          )
+
+        send(caller, {:agent_event, %{"type" => "ready"}})
+
+        {:ok,
+         %{
+           port: port,
+           caller: caller,
+           agent_id: agent_id,
+           buffer: "",
+           in_thinking: false,
+           current_text: "",
+           current_thinking: "",
+           current_tools: [],
+           prompt_start: nil,
+           thinking_start: nil
+         }}
+      end
     else
-      api_keys =
-        [{"ZEA_TOKEN", token} | env_vars]
-        |> Enum.filter(fn {_, v} -> v != nil and v != "" end)
-        |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
-        |> Enum.join(" ")
+      {:error, reason} ->
+        Logger.error("AgentRunner: failed to create sandbox for #{agent_id}: #{reason}")
 
-      # Read local config if exists
-      config_path = Path.join([home, ".pi", "agent", "config.json"])
-      pi_args = ["--mode", "rpc", "--session-dir", "#{home}/.pi-sessions"]
+        send(caller, {:agent_event,
+          %{"type" => "error",
+            "code" => "sandbox_create_failed",
+            "message" => "Failed to create sandbox user: #{reason}",
+            "fix" => "zea soma sandbox create #{agent_id} --org #{org_id} --type agent"}})
 
-      pi_args =
-        case fs().read(config_path) do
-          {:ok, content} ->
-            case Jason.decode(content) do
-              {:ok, config} ->
-                args = pi_args
-
-                args =
-                  if config["system_prompt"],
-                    do: args ++ ["--system-prompt", config["system_prompt"]],
-                    else: args
-
-                args =
-                  if config["provider"],
-                    do: args ++ ["--provider", config["provider"]],
-                    else: args
-
-                args = if config["model"], do: args ++ ["--model", config["model"]], else: args
-                args
-
-              _ ->
-                pi_args
-            end
-
-          _ ->
-            pi_args
-        end
-
-      pi_cmd = "#{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
-      args = ["-u", username, "bash", "-c", pi_cmd]
-
-      Logger.info("AgentRunner: sudo #{Enum.join(args, " ")}")
-
-      port =
-        shell().spawn_port(
-          {:spawn_executable, System.find_executable("sudo")},
-          [:binary, :stream, :use_stdio, :exit_status, args: args]
-        )
-
-      send(caller, {:agent_event, %{"type" => "ready"}})
-
-      {:ok,
-       %{
-         port: port,
-         caller: caller,
-         agent_id: agent_id,
-         buffer: "",
-         in_thinking: false,
-         current_text: "",
-         current_thinking: "",
-         current_tools: [],
-         prompt_start: nil,
-         thinking_start: nil
-       }}
+        {:stop, :sandbox_create_failed}
     end
   end
 
