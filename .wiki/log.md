@@ -4,6 +4,20 @@ Bitácora cronológica de cambios. Formato: `## [YYYY-MM-DD] <tipo> | <descripci
 
 ---
 
+## [2026-07-25] fix | Archivos roto en Südlich — rutas /api/files/unified y /api/sandboxes
+
+- **Issue**: #124 (API /api/sandboxes y /api/files/unified retornan not_found)
+- **Causa 1**: \`forward("/files", ...)\` capturaba \`/files/unified\` antes que su forward específico → 404. Fix: reordenar en auth_router.ex.
+- **Causa 2**: \`POST /api/sandboxes\` no existía (solo GET /create) → 404. Fix: \`post "/"\` en SandboxController.
+- **Causa 3**: \`fs().stat(full).size\` sobre \`{:ok, %File.Stat{}}\` → 500. Fix: pattern match \`{:ok, stat}\` en workspace.ex.
+- **PRs**: #125 (rutas), #126 (KeyError)
+
+## [2026-07-25] fix | LogFormatter maneja timestamp como tupla {{date},{time}}
+
+- **PR**: #123
+- Logger.Formatter en Elixir 1.18 pasa timestamp como tupla Erlang-style, no como DateTime ni integer.
+- Fix final: manejar los 3 formatos (DateTime, integer, tupla).
+
 ## [2026-07-25] fix | AgentRunner auto-crea sandbox + FORMATTER CRASH fix
 
 - **Issues**: #110 (zea soma chat da 502), #120 (AgentRunner no crea sandbox automáticamente)
