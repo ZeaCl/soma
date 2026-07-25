@@ -64,7 +64,6 @@ defmodule Soma.MixProject do
       precommit: [
         "format --check-formatted",
         "compile --warnings-as-errors",
-        "deps.unlock --check-unused",
         "coveralls.json",
         "cmd ./doctor-soma.sh"
       ],

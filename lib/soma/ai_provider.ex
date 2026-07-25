@@ -5,6 +5,21 @@ defmodule Soma.AIProvider do
   Single source of truth for provider names, normalizing between
   external representations (strings from CLI/Thalamus) and internal
   representations (atoms verified by Dialyzer).
+
+  ## Usage
+
+  When receiving a provider string from an external source (CLI, API, Thalamus),
+  always normalize through `from_string/1` first:
+
+      {:ok, provider} = AIProvider.from_string("DeepSeek")
+      AIProvider.to_query_param(provider)  # => "deepseek"
+      AIProvider.to_env_var(provider)      # => "DEEPSEEK_API_KEY"
+
+  For internal iteration over all supported providers, use `supported/0`:
+
+      Enum.each(AIProvider.supported(), fn provider ->
+        # provider is :deepseek | :openai | :anthropic
+      end)
   """
 
   @type t :: :deepseek | :openai | :anthropic

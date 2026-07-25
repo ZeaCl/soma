@@ -10,5 +10,8 @@
   {"lib/soma_web/plugs/jwt_auth.ex", :call},
 
   # router.ex — PromEx.export/0 not available in dev/test
-  {"lib/soma_web/router.ex", :call_to_missing}
+  {"lib/soma_web/router.ex", :call_to_missing},
+
+  # file_controller.ex — intentional _ -> catch-all for future-proofing
+  {"lib/soma_web/controllers/file_controller.ex", :pattern_match_cov}
 ]
