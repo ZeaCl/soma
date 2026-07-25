@@ -13,7 +13,6 @@ defmodule SomaWeb.FileController do
 
     case Workspace.list_files_per_agent(org_id, agent_id, path) do
       {:ok, files} -> json(conn, 200, %{files: format_file_list(files)})
-      {:error, reason} -> json(conn, 500, %{error: inspect(reason)})
     end
   end
 
@@ -68,7 +67,6 @@ defmodule SomaWeb.FileController do
     case Workspace.rename(conn.assigns[:org_id], attrs["path"], attrs["newName"]) do
       {:ok, path} -> json(conn, 200, %{ok: true, path: path})
       {:error, :not_found} -> json(conn, 404, %{error: "No encontrado"})
-      {:error, reason} -> json(conn, 500, %{error: inspect(reason)})
     end
   end
 
@@ -78,7 +76,6 @@ defmodule SomaWeb.FileController do
     case Workspace.move(conn.assigns[:org_id], attrs["source"], attrs["dest"]) do
       {:ok, path} -> json(conn, 200, %{ok: true, path: path})
       {:error, :not_found} -> json(conn, 404, %{error: "No encontrado"})
-      {:error, reason} -> json(conn, 500, %{error: inspect(reason)})
     end
   end
 
@@ -89,7 +86,6 @@ defmodule SomaWeb.FileController do
       {:ok, _} -> json(conn, 200, %{ok: true})
       {:error, :not_found} -> json(conn, 404, %{error: "No encontrado"})
       {:error, :directory_not_empty} -> json(conn, 409, %{error: "Directorio no vacío"})
-      {:error, reason} -> json(conn, 500, %{error: inspect(reason)})
     end
   end
 

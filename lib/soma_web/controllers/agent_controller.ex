@@ -37,7 +37,10 @@ defmodule SomaWeb.AgentController do
               for name <- skill_names do
                 src = Path.join(["/root/.agents/skills", name])
                 dst = Path.join([home, "skills", name])
-                if File.dir?(src), do: File.mkdir_p!(dst) && File.cp_r!(src, dst)
+                if File.dir?(src) do
+                  File.mkdir_p!(dst)
+                  File.cp_r!(src, dst)
+                end
               end
 
               cfg_dir = Path.join([home, ".pi", "agent"])
