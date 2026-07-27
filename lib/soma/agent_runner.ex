@@ -103,7 +103,7 @@ defmodule Soma.AgentRunner do
               pi_args
           end
 
-        pi_cmd = "#{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
+        pi_cmd = "cd #{home} && #{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
         args = ["-u", username, "bash", "-c", pi_cmd]
 
         Logger.info("AgentRunner: sudo #{Enum.join(args, " ")}")
