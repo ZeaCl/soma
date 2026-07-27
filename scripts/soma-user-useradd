@@ -78,7 +78,12 @@ if [ ! -L "$SHARED_LINK" ] || [ "$(readlink "$SHARED_LINK" 2>/dev/null || echo '
   ln -s "$SHARED_TARGET" "$SHARED_LINK" && echo "   ✅ Symlink: workspace/shared → org workspace"
 fi
 
-# 6. Permisos
+# 6. Guardar org_id para recuperación en bootstrap
+mkdir -p "$HOMEDIR/.soma"
+echo "$ORG_ID" > "$HOMEDIR/.soma/org_id"
+echo "   ✅ Org ID saved: $ORG_ID"
+
+# 7. Permisos
 chown -R "$USERNAME:$USERNAME" "$HOMEDIR"
 chmod 700 "$HOMEDIR"
 chmod 700 "$HOMEDIR/workspace"

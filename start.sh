@@ -15,6 +15,18 @@ mkdir -p /app/.pi-agent-messages
 mkdir -p /app/.pi-agent-sessions
 
 # ── Bootstrap: recrear usuarios Linux desde homes persistentes ────
+# Helper: reparar symlink al workspace compartido si falta o es incorrecto
+_fix_shared_symlink() {
+  local home="$1" org_id="$2"
+  local link="$home/workspace/shared"
+  local target="../../orgs/$org_id/shared"
+  mkdir -p "/home/orgs/$org_id/shared"
+  if [ ! -L "$link" ] || [ "$(readlink "$link" 2>/dev/null || echo '')" != "$target" ]; then
+    [ -e "$link" ] || [ -L "$link" ] && rm -rf "$link"
+    ln -s "$target" "$link" && echo "   🔗 Symlink reparado: $link → $target"
+  fi
+}
+
 echo "📁 Bootstrap: recreando usuarios desde /home/soma-*/..."
 for home in /home/soma-*/; do
   username=$(basename "$home")
@@ -26,6 +38,10 @@ for home in /home/soma-*/; do
     usermod -aG soma-agents,"org-00000000-0000-0000-0000-000000000000" "$username" 2>/dev/null || true
     chown -R "$username:$username" "$home" 2>/dev/null || true
     echo "   ✅ Agente recreado: $username"
+  fi
+  # Reparar symlink al workspace compartido si hace falta
+  if [ -f "$home/.soma/org_id" ]; then
+    _fix_shared_symlink "$home" "$(cat "$home/.soma/org_id")"
   fi
 done
 
@@ -40,6 +56,10 @@ for home in /home/user-*/; do
     usermod -aG "org-00000000-0000-0000-0000-000000000000" "$username" 2>/dev/null || true
     chown -R "$username:$username" "$home" 2>/dev/null || true
     echo "   ✅ Usuario recreado: $username"
+  fi
+  # Reparar symlink al workspace compartido si hace falta
+  if [ -f "$home/.soma/org_id" ]; then
+    _fix_shared_symlink "$home" "$(cat "$home/.soma/org_id")"
   fi
 done
 

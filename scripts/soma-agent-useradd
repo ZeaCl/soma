@@ -119,7 +119,12 @@ if [ -n "$MOUNTS_JSON" ] && [ "$MOUNTS_JSON" != "[]" ]; then
   done
 fi
 
-# ── 6. Permisos ──────────────────────────────────────────────────────
+# ── 6. Guardar org_id para recuperación en bootstrap ────────────────
+mkdir -p "$HOMEDIR/.soma"
+echo "$ORG_ID" > "$HOMEDIR/.soma/org_id"
+echo "   ✅ Org ID saved: $ORG_ID"
+
+# ── 7. Permisos ──────────────────────────────────────────────────────
 chown -R "$USERNAME:$USERNAME" "$HOMEDIR"
 chmod 700 "$HOMEDIR"
 chmod 700 "$HOMEDIR/workspace"
