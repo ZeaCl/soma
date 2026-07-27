@@ -135,6 +135,9 @@ Fix: creación de API keys con fallback a organización default (`00000000-...`)
 
 ---
 
+## [2026-07-25] incident | #127 — Agentes desaparecidos post-deploy
+Diagnóstico inicial fue directo a DB/logs sin validar con CLI. El token del reporte había expirado (22:21 UTC), lo que causaba `[]` en `zea soma agent list`. Al refrescar token, la CLI mostró 8 "agentes" pero solo 1 real (`Full Stack Dev`). Los otros 7 fueron borrados (hard delete) de `users` en Thalamus. Además, Thalamus ignora el query param `is_agent=true` — `build_filters` no lo procesa. Issue creado en Thalamus: [#111](https://github.com/ZeaCl/thalamus/issues/111). **Lección**: siempre validar primero con `zea` CLI antes de ir a DB/logs.
+
 ## [2026-06-24] feat | Versión inicial de Soma AgentHub
 Primera versión funcional con:
 - Elixir API (Phoenix Plug.Router) con CRUD de conversaciones, archivos, skills
