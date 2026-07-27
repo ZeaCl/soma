@@ -79,16 +79,6 @@ mkdir -p "$HOMEDIR/.agents/skills"
 [ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.bashrc" "$HOMEDIR/" 2>/dev/null || true
 [ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.gitconfig" "$HOMEDIR/" 2>/dev/null || true
 
-# AGENTS.md — guía para el agente sobre dónde están los archivos compartidos
-cat > "$HOMEDIR/AGENTS.md" << 'AGENTSEOF'
-# Shared Workspace
-
-Los archivos compartidos de la organización están en `workspace/shared/`.
-Usá `ls workspace/shared/` para listarlos y `read workspace/shared/<archivo>` para leerlos.
-
-Para buscar archivos Excel: `find workspace/shared -name "*.xlsx"`
-AGENTSEOF
-
 # ── 5. Symlinks al workspace compartido de la org (no bind mounts) ──
 #    Los symlinks sobreviven restarts porque /home/ está en volumen persistente.
 WS_ROOT="/home/orgs"
