@@ -108,6 +108,8 @@ if [ -n "$TEAMS" ]; then
 fi
 
 # Custom mounts desde el JSON (si hay) — también como symlinks
+# NOTA: usar paths relativos al home del agente (ej. "../../orgs/x/shared"),
+# no paths absolutos (ej. "/workspace/orgs/...") que ya no existen.
 if [ -n "$MOUNTS_JSON" ] && [ "$MOUNTS_JSON" != "[]" ]; then
   echo "   Processing custom mounts (symlinks)..."
   echo "$MOUNTS_JSON" | tr '}' '\n' | while read -r chunk; do
