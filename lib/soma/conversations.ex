@@ -75,13 +75,12 @@ defmodule Soma.Conversations do
 
     case result do
       {:ok, _msg} ->
-        # Bump conversation metadata
-        {1, _} =
-          Repo.update_all(
-            from(c in Conversation, where: c.id == ^conv_id),
-            inc: [message_count: 1],
-            set: [last_message_at: DateTime.utc_now()]
-          )
+        # Bump conversation metadata (ignore if conv was deleted)
+        Repo.update_all(
+          from(c in Conversation, where: c.id == ^conv_id),
+          inc: [message_count: 1],
+          set: [last_message_at: DateTime.utc_now()]
+        )
 
         :ok
 

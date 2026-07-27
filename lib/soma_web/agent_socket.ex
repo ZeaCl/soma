@@ -149,6 +149,4 @@ defmodule SomaWeb.AgentSocket do
         {:push, {:text, Jason.encode!(msg)}, state}
     end
   end
-
-
 end
