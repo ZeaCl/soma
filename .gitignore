@@ -6,3 +6,29 @@ erl_crash.dump
 node_modules/
 cover/
 priv/plts
+
+# ═══ SEGURIDAD: Nunca commitear datos sensibles ═══
+# Archivos de datos
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.tsv
+# Credenciales
+*.pem
+*.key
+*-key.json
+*-key.yaml
+*.p12
+*.pfx
+# Secrets
+.env
+.env.*
+!.env.example
+*.secret
+secrets.yaml
+secrets.yml
+# Tokens
+token.json
+credentials.json
+service-account.json
