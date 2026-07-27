@@ -57,18 +57,6 @@ defmodule SomaWeb.SandboxController do
     end
   end
 
-  get "/" do
-    org_id = conn.assigns[:org_id]
-    owner_type = conn.params["owner_type"] || "agent"
-    owner_id = conn.params["owner_id"]
-    path = conn.params["path"] || ""
-
-    case Workspace.list_files(owner_type, owner_id, org_id, path) do
-      {:ok, files} ->
-        json(conn, 200, %{files: format_file_list(files), owner_type: owner_type})
-    end
-  end
-
   post "/upload" do
     org_id = conn.assigns[:org_id]
     attrs = conn.body_params

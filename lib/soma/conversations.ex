@@ -27,15 +27,18 @@ defmodule Soma.Conversations do
            is_deleted: false
          ) do
       nil ->
-        %Conversation{}
-        |> Conversation.changeset(%{
-          organization_id: org_id,
-          user_id: user_id,
-          agent_id: agent_id,
-          app_context: app_context,
-          title: "Nueva conversación"
-        })
-        |> Repo.insert!()
+        case %Conversation{}
+             |> Conversation.changeset(%{
+               organization_id: org_id,
+               user_id: user_id,
+               agent_id: agent_id,
+               app_context: app_context,
+               title: "Nueva conversación"
+             })
+             |> Repo.insert() do
+          {:ok, conv} -> conv
+          {:error, _} -> raise "Failed to create conversation"
+        end
 
       conv ->
         conv
@@ -65,8 +68,26 @@ defmodule Soma.Conversations do
   end
 
   def add_message(conv_id, attrs) do
-    %Message{}
-    |> Message.changeset(Map.put(attrs, :conversation_id, conv_id))
-    |> Repo.insert()
+    result =
+      %Message{}
+      |> Message.changeset(Map.put(attrs, :conversation_id, conv_id))
+      |> Repo.insert()
+
+    case result do
+      {:ok, _msg} ->
+        # Bump conversation metadata (ignore if conv was deleted)
+        Repo.update_all(
+          from(c in Conversation, where: c.id == ^conv_id),
+          inc: [message_count: 1],
+          set: [last_message_at: DateTime.utc_now()]
+        )
+
+        :ok
+
+      _ ->
+        :ok
+    end
+
+    result
   end
 end

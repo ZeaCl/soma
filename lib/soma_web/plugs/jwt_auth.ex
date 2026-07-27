@@ -13,7 +13,7 @@ defmodule SomaWeb.Plugs.JWTAuth do
             org_id = get_org_id(conn, claims, token)
 
             conn
-            |> assign(:user_id, claims["sub"])
+            |> assign(:user_id, normalize_user_id(claims["sub"]))
             |> assign(:org_id, org_id)
             |> assign(:jwt_claims, claims)
             |> assign(:authenticated, true)
@@ -86,6 +86,10 @@ defmodule SomaWeb.Plugs.JWTAuth do
     pem_entry = :public_key.pem_entry_encode(:RSAPublicKey, {:RSAPublicKey, n_int, e_int})
     :public_key.pem_encode([pem_entry])
   end
+
+  @doc "Normaliza user_id quitando prefijo user_ para consistencia con WebSocket."
+  def normalize_user_id("user_" <> id), do: id
+  def normalize_user_id(id), do: id
 
   defp get_org_id(conn, claims, token) do
     # 1. Header explícito

@@ -7,6 +7,9 @@ defmodule SomaWeb.AgentSocket do
   alias Soma.Conversations
   alias SomaWeb.Plugs.JWTAuth
 
+  # Delegate to JWTAuth for canonical normalization
+  defp normalize_user_id(id), do: JWTAuth.normalize_user_id(id)
+
   @impl true
   def init(state) do
     Process.flag(:trap_exit, true)
@@ -29,10 +32,13 @@ defmodule SomaWeb.AgentSocket do
       {:ok, %{"type" => "prompt", "text" => text}} ->
         if state[:agent_runner] do
           spawn(fn ->
-            Conversations.add_message(state.conv_id, %{
+            case Conversations.add_message(state.conv_id, %{
               role: "user",
               content: text
-            })
+            }) do
+              {:ok, _} -> :ok
+              {:error, reason} -> Logger.error("AgentSocket: failed to save user message: #{inspect(reason)}")
+            end
           end)
 
           AgentRunner.send_prompt(state.agent_runner, text)
@@ -63,12 +69,15 @@ defmodule SomaWeb.AgentSocket do
     spawn(fn ->
       tools = if Enum.empty?(final_tools), do: nil, else: final_tools
 
-      Conversations.add_message(state.conv_id, %{
+      case Conversations.add_message(state.conv_id, %{
         role: "assistant",
         content: if(final_text != "", do: final_text, else: "(sin respuesta)"),
         thinking: if(final_thinking != "", do: final_thinking, else: nil),
         tools: tools
-      })
+      }) do
+        {:ok, _} -> :ok
+        {:error, reason} -> Logger.error("AgentSocket: failed to save assistant message: #{inspect(reason)}")
+      end
     end)
 
     {:push, {:text, Jason.encode!(%{type: "done"})}, state}
@@ -101,7 +110,7 @@ defmodule SomaWeb.AgentSocket do
       {:ok, claims, org_id} ->
         Logger.info("AgentSocket: Init agent=#{agent_id} org=#{org_id}")
 
-        user_id = strip_user_prefix(claims["sub"])
+        user_id = normalize_user_id(claims["sub"])
 
         # Resolver la conversación real (UUID) — el cid del cliente puede ser
         # un string arbitrario (ej. "cli-{timestamp}"), no un UUID válido para Ecto.
@@ -140,7 +149,4 @@ defmodule SomaWeb.AgentSocket do
         {:push, {:text, Jason.encode!(msg)}, state}
     end
   end
-
-  defp strip_user_prefix("user_" <> id), do: id
-  defp strip_user_prefix(id), do: id
 end
