@@ -1,7 +1,7 @@
 defmodule Soma.Workspace do
   @moduledoc "Multi-tenant workspace: files + Git tracking per organization."
 
-  @workspace_root Application.compile_env(:soma, :workspace_root, "/workspace/orgs")
+  @workspace_root Application.compile_env(:soma, :workspace_root, "/home/orgs")
 
   defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
   defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
@@ -42,7 +42,7 @@ defmodule Soma.Workspace do
   Lista archivos según owner_type:
   - "user" → /home/user-{shortId}/workspace
   - "agent" → /home/soma-{shortId}/workspace
-  - "org" → /workspace/orgs/{org_id}/shared
+  - "org" → /home/orgs/{org_id}/shared
   """
   def list_files(owner_type, owner_id, org_id, sub_path \\ "") do
     base = workspace_base(owner_type, owner_id, org_id)

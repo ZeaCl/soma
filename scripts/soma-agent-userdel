@@ -23,15 +23,7 @@ if ! id "$USERNAME" >/dev/null 2>&1; then
   exit 0
 fi
 
-# ── 2. Desmontar bind mounts ────────────────────────────────────────
-if [ -d "$HOMEDIR" ]; then
-  echo "   Unmounting bind mounts under $HOMEDIR..."
-  mount 2>/dev/null | grep "$HOMEDIR" | awk '{print $3}' | while read -r mp; do
-    umount "$mp" 2>/dev/null && echo "   ✅ Unmounted: $mp" || echo "   ⚠️  Could not unmount: $mp"
-  done || true
-fi
-
-# ── 3. Matar procesos del usuario ────────────────────────────────────
+# ── 2. Matar procesos del usuario ────────────────────────────────────
 if command -v pkill >/dev/null 2>&1; then
   pkill -u "$USERNAME" 2>/dev/null || true
   echo "   ✅ Processes killed"
@@ -41,7 +33,7 @@ else
   echo "   ✅ Processes killed"
 fi
 
-# ── 4. Borrar usuario y home ─────────────────────────────────────────
+# ── 3. Borrar usuario y home ─────────────────────────────────────────
 if [ -f /etc/alpine-release ]; then
   deluser --remove-home "$USERNAME" 2>/dev/null && echo "   ✅ User deleted with home" || {
     deluser "$USERNAME" 2>/dev/null || true
@@ -56,7 +48,7 @@ else
   }
 fi
 
-# ── 5. Verificar ─────────────────────────────────────────────────────
+# ── 4. Verificar ─────────────────────────────────────────────────────
 if id "$USERNAME" >/dev/null 2>&1; then
   echo "❌ User still exists after deletion attempt"
   exit 1

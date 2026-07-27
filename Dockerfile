@@ -39,7 +39,7 @@ RUN chmod +x /usr/local/bin/soma-agent-useradd /usr/local/bin/soma-agent-userdel
  && chmod +x /usr/local/bin/soma-user-useradd /usr/local/bin/soma-user-userdel
 
 # ── Directorios base para el sandbox ────────────────────────────────
-RUN mkdir -p /home /workspace/orgs /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages /app/.pi-agent-sessions
+RUN mkdir -p /home /home/orgs /root/.agents/skills /app/.pi-agent-skills /app/.pi-agent-messages /app/.pi-agent-sessions
 
 # ── Pi agent config (provider, model) ──────────────────────────────
 RUN mkdir -p /app/.pi/agent && \

@@ -1,0 +1,10 @@
+# .pre-commit-config.yaml — bloquea secrets y datos sensibles
+repos:
+  - repo: local
+    hooks:
+      - id: detect-secrets
+        name: 🔍 Scan for secrets
+        entry: scripts/pre-commit-secrets.sh
+        language: script
+        pass_filenames: false
+        always_run: true

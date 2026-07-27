@@ -269,3 +269,4 @@ La CLI está en `cli/index.js` y se comunica con la API Elixir vía REST. Autent
 - ❌ No asumir que Thalamus siempre responde — manejar fallback con array vacío
 - ❌ No modificar el SDK sin rebuild + publish
 - ❌ No pushear a main directamente — siempre vía PR
+- ❌ No diagnosticar bugs con `curl` o queries SQL directo sin antes reproducir con `zea` CLI. La CLI es el contrato con el usuario — si el bug se reportó por CLI, validá por CLI primero

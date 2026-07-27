@@ -22,6 +22,9 @@ config :soma, :thalamus,
 
 config :soma, :agent_host, System.get_env("AGENT_HOST", "http://zea-agent:3001")
 
+config :soma, :workspace_root, "/home/orgs"
+config :soma, :org_workspace_root, "/home/orgs"
+
 config :logger, level: :info
 
 config :soma, SomaWeb.Endpoint,

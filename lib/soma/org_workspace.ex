@@ -3,7 +3,7 @@ defmodule Soma.OrgWorkspace do
   Workspace compartido por organización — grupos Linux para control de acceso.
   """
 
-  @workspace_root Application.compile_env(:soma, :org_workspace_root, "/workspace/orgs")
+  @workspace_root Application.compile_env(:soma, :org_workspace_root, "/home/orgs")
 
   defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
   defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)

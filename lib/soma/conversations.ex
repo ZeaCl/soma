@@ -82,6 +82,11 @@ defmodule Soma.Conversations do
           set: [last_message_at: DateTime.utc_now()]
         )
 
+        # Auto-update title from first user message
+        if attrs[:role] == "user" do
+          maybe_update_title(conv_id, attrs[:content])
+        end
+
         :ok
 
       _ ->
@@ -90,4 +95,19 @@ defmodule Soma.Conversations do
 
     result
   end
+
+  defp maybe_update_title(conv_id, content) when is_binary(content) do
+    title = content |> String.slice(0, 80) |> String.trim()
+
+    if title != "" do
+      Repo.update_all(
+        from(c in Conversation,
+          where: c.id == ^conv_id and c.title == "Nueva conversación"
+        ),
+        set: [title: title]
+      )
+    end
+  end
+
+  defp maybe_update_title(_conv_id, _content), do: :ok
 end

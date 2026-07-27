@@ -215,7 +215,8 @@ defmodule Soma.Skills do
   # ── App Context ──────────────────────────────
 
   def load_app_context(org_id, app) do
-    path = Path.join(["/workspace/orgs", org_id, app, "AGENTS.md"])
+    workspace_root = Application.get_env(:soma, :workspace_root, "/home/orgs")
+    path = Path.join([workspace_root, org_id, app, "AGENTS.md"])
 
     if file_system().exists?(path) do
       content = file_system().read!(path)

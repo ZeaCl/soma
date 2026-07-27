@@ -162,6 +162,7 @@ Incluir `Closes #N` si cierra un issue.
 - ❌ No modificar el SDK sin rebuild + publish
 - ❌ No pushear a `main` directamente — siempre vía PR
 - ❌ No hardcodear `localhost` como baseUrl en el SDK — usar prop `baseUrl` dinámico
+- ❌ No diagnosticar bugs con `curl` o queries SQL directo sin antes reproducir con `zea` CLI. La CLI es el contrato con el usuario — si el bug se reportó por CLI, validá por CLI primero
 
 ---
 
