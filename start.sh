@@ -9,7 +9,7 @@ echo ""
 # ── Bootstrap: sandbox base dirs ──────────────────────────────────
 echo "📁 Bootstrap: creando directorios base del sandbox..."
 mkdir -p /home
-mkdir -p /workspace/orgs
+mkdir -p /home/orgs
 mkdir -p /app/.pi-agent-skills
 mkdir -p /app/.pi-agent-messages
 mkdir -p /app/.pi-agent-sessions

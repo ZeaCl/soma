@@ -79,44 +79,49 @@ mkdir -p "$HOMEDIR/.agents/skills"
 [ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.bashrc" "$HOMEDIR/" 2>/dev/null || true
 [ -d "$BOOTSTRAP" ] && cp "$BOOTSTRAP/.gitconfig" "$HOMEDIR/" 2>/dev/null || true
 
-# ── 5. Permisos ──────────────────────────────────────────────────────
+# ── 5. Symlinks al workspace compartido de la org (no bind mounts) ──
+#    Los symlinks sobreviven restarts porque /home/ está en volumen persistente.
+WS_ROOT="/home/orgs"
+
+_create_symlink() {
+  local src="$1" dst="$2"
+  # Si ya existe un symlink correcto, skip
+  if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || echo '')" = "$src" ]; then
+    return
+  fi
+  # Si existe un directorio o archivo, lo removemos
+  [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
+  mkdir -p "$(dirname "$dst")"
+  mkdir -p "$WS_ROOT/$ORG_ID/shared"
+  ln -s "$src" "$dst" && echo "   ✅ Symlink: $dst → $src" || echo "   ⚠️  Symlink failed: $dst → $src"
+}
+
+# Shared workspace: /home/orgs/{orgId}/shared → workspace/shared
+_create_symlink "../../orgs/$ORG_ID/shared" "$HOMEDIR/workspace/shared"
+
+# Team workspaces (si hay teams)
+if [ -n "$TEAMS" ]; then
+  for team in $(echo "$TEAMS" | tr ',' ' '); do
+    mkdir -p "$WS_ROOT/$ORG_ID/teams/$team"
+    _create_symlink "../../../orgs/$ORG_ID/teams/$team" "$HOMEDIR/workspace/teams/$team"
+  done
+fi
+
+# Custom mounts desde el JSON (si hay) — también como symlinks
+if [ -n "$MOUNTS_JSON" ] && [ "$MOUNTS_JSON" != "[]" ]; then
+  echo "   Processing custom mounts (symlinks)..."
+  echo "$MOUNTS_JSON" | tr '}' '\n' | while read -r chunk; do
+    src=$(echo "$chunk" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    dst=$(echo "$chunk" | sed -n 's/.*"dest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    [ -n "$src" ] && [ -n "$dst" ] && _create_symlink "$src" "$HOMEDIR/$dst"
+  done
+fi
+
+# ── 6. Permisos ──────────────────────────────────────────────────────
 chown -R "$USERNAME:$USERNAME" "$HOMEDIR"
 chmod 700 "$HOMEDIR"
 chmod 700 "$HOMEDIR/workspace"
 echo "   ✅ Permissions: $(stat -c '%a %U:%G' "$HOMEDIR" 2>/dev/null || stat -f '%A %Su:%Sg' "$HOMEDIR")"
-
-# ── 6. Montar volúmenes compartidos (bash puro, sin python) ──────────
-_mount_bind() {
-  local src="$1" dst="$2" ro="$3"
-  [ ! -d "$src" ] && { echo "   ⚠️  Source not found: $src — skipping"; return; }
-  mkdir -p "$dst"
-  if mount --bind "$src" "$dst" 2>/dev/null; then
-    if [ "$ro" = "true" ]; then
-      if mount -o remount,ro,bind "$dst" 2>/dev/null; then
-        echo "   ✅ Mount: $src → $dst (ro)"
-      else
-        # overlayfs fallback: ensure source is not writable by agent users
-        echo "   ⚠️  Mount: $src → $dst (rw, remount ro not supported on this fs)"
-        echo "   → Ensure source permissions prevent writes (chown root:root $src)"
-      fi
-    else
-      echo "   ✅ Mount: $src → $dst (rw)"
-    fi
-  else
-    echo "   ⚠️  Mount failed: $src"
-  fi
-}
-
-if [ -n "$MOUNTS_JSON" ] && [ "$MOUNTS_JSON" != "[]" ]; then
-  echo "   Processing mounts..."
-  # Parse simple JSON array of {source, dest, ro} objects
-  echo "$MOUNTS_JSON" | tr '}' '\n' | while read -r chunk; do
-    src=$(echo "$chunk" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-    dst=$(echo "$chunk" | sed -n 's/.*"dest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-    ro=$(echo "$chunk" | grep -q '"ro"[[:space:]]*:[[:space:]]*true' && echo "true" || echo "false")
-    [ -n "$src" ] && _mount_bind "$src" "$HOMEDIR/${dst:-shared}" "$ro"
-  done
-fi
 
 echo ""
 echo "✅ Agent user ready: $USERNAME"

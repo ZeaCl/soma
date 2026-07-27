@@ -68,7 +68,17 @@ echo "   ✅ Groups: $(groups "$USERNAME" | cut -d: -f2)"
 mkdir -p "$HOMEDIR/workspace"
 mkdir -p "$HOMEDIR/.config"
 
-# 5. Permisos
+# 5. Symlinks al workspace compartido de la org
+WS_ROOT="/home/orgs"
+SHARED_LINK="$HOMEDIR/workspace/shared"
+SHARED_TARGET="../../orgs/$ORG_ID/shared"
+mkdir -p "$WS_ROOT/$ORG_ID/shared"
+if [ ! -L "$SHARED_LINK" ] || [ "$(readlink "$SHARED_LINK" 2>/dev/null || echo '')" != "$SHARED_TARGET" ]; then
+  [ -e "$SHARED_LINK" ] || [ -L "$SHARED_LINK" ] && rm -rf "$SHARED_LINK"
+  ln -s "$SHARED_TARGET" "$SHARED_LINK" && echo "   ✅ Symlink: workspace/shared → org workspace"
+fi
+
+# 6. Permisos
 chown -R "$USERNAME:$USERNAME" "$HOMEDIR"
 chmod 700 "$HOMEDIR"
 chmod 700 "$HOMEDIR/workspace"
