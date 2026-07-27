@@ -1,0 +1,6 @@
+# Skills con información de arquitectura interna de ZEA.
+# Se descargan en CI desde Thalamus API antes del build.
+/fund-management/
+/user-sandbox/
+/xlsx-import/
+/soma-agents/
