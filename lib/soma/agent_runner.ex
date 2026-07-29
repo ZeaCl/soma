@@ -196,7 +196,14 @@ defmodule Soma.AgentRunner do
   @impl true
   def handle_cast(:stop, state) do
     cancel_timers(state)
-    shell().port_close(state.port)
+
+    # Port may already be closed (e.g., by abort flow) — close is idempotent here
+    try do
+      shell().port_close(state.port)
+    rescue
+      _ -> :ok
+    end
+
     {:stop, :normal, state}
   end
 
