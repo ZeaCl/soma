@@ -130,7 +130,9 @@ defmodule Soma.AgentRunner do
            current_thinking: "",
            current_tools: [],
            prompt_start: nil,
-           thinking_start: nil
+           thinking_start: nil,
+           abort_sigterm_timer: nil,
+           abort_kill_timer: nil
          }}
       end
     else
