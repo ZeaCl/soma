@@ -171,8 +171,8 @@ defmodule Soma.AgentRunner do
      }}
   end
 
-  @abort_sigterm_ms 3_000
-  @abort_timeout_ms 5_000
+  @abort_sigterm_ms Application.compile_env(:soma, :abort_sigterm_ms, 3_000)
+  @abort_kill_ms Application.compile_env(:soma, :abort_kill_ms, 5_000)
 
   @impl true
   def handle_cast(:abort, %{aborted: true} = state), do: {:noreply, state}
@@ -183,11 +183,12 @@ defmodule Soma.AgentRunner do
     shell().port_command(state.port, Jason.encode!(%{type: "abort"}) <> "\n")
     shell().port_command(state.port, Jason.encode!(%{type: "abort_bash"}) <> "\n")
 
-    # Estrategia en 2 fases por si pi no responde (bloqueado en subproceso):
-    # Fase 1 (3s): SIGTERM al proceso pi
-    # Fase 2 (5s): Kill forzoso del Port (SIGKILL implícito)
+    # Estrategia en 3 fases por si pi no responde (bloqueado en subproceso):
+    # Fase 1 (0s): comandos stdin (abort + abort_bash)
+    # Fase 2 (3s): SIGTERM al process group del Port
+    # Fase 3 (5s): Kill forzoso del Port
     sigterm_timer = Process.send_after(self(), :abort_sigterm, @abort_sigterm_ms)
-    kill_timer = Process.send_after(self(), :abort_timeout, @abort_timeout_ms)
+    kill_timer = Process.send_after(self(), :abort_timeout, @abort_kill_ms)
 
     {:noreply,
      %{state | aborted: true, abort_sigterm_timer: sigterm_timer, abort_kill_timer: kill_timer}}
@@ -197,9 +198,13 @@ defmodule Soma.AgentRunner do
   def handle_cast(:stop, state) do
     cancel_timers(state)
 
-    # Port may already be closed (e.g., by abort flow) — close is idempotent here
+    # Port may already be closed (e.g., by abort flow) — guard against double-close.
+    # Port.info works on real ports but raises on mock refs, so rescue gracefully.
     try do
-      shell().port_close(state.port)
+      case Port.info(state.port, :name) do
+        {:name, _} -> shell().port_close(state.port)
+        :undefined -> :ok
+      end
     rescue
       _ -> :ok
     end
@@ -209,15 +214,29 @@ defmodule Soma.AgentRunner do
 
   @impl true
   def handle_info(:abort_sigterm, state) do
-    Logger.warning("AgentRunner: abort phase 2 — sending SIGTERM to pi process")
+    Logger.warning("AgentRunner: abort SIGTERM phase — sending SIGTERM to pi process group")
 
-    # Obtener OS PID del Port y enviar SIGTERM
-    case Port.info(state.port, :os_pid) do
-      {:os_pid, os_pid} when is_integer(os_pid) and os_pid > 0 ->
-        System.cmd("kill", ["-TERM", "#{os_pid}"])
+    # Enviar SIGTERM al process group (PID negativo) para alcanzar
+    # a todo el árbol: sudo → bash → pi → subprocesos.
+    # Port.info funciona con ports reales; con mocks (tests) falla y hacemos skip.
+    os_pid =
+      try do
+        case Port.info(state.port, :os_pid) do
+          {:os_pid, pid} when is_integer(pid) and pid > 0 -> pid
+          _ -> nil
+        end
+      rescue
+        _ -> nil
+      end
 
-      _ ->
-        Logger.warning("AgentRunner: could not get OS PID for port, skipping SIGTERM")
+    if os_pid do
+      try do
+        System.cmd("kill", ["-TERM", "-#{os_pid}"])
+      rescue
+        _ -> Logger.warning("AgentRunner: kill command failed")
+      end
+    else
+      Logger.warning("AgentRunner: could not get OS PID for port, skipping SIGTERM")
     end
 
     {:noreply, state}
@@ -226,6 +245,7 @@ defmodule Soma.AgentRunner do
   @impl true
   def handle_info(:abort_timeout, state) do
     Logger.warning("AgentRunner: abort timeout — force-killing pi process")
+    cancel_timers(state)
     shell().port_close(state.port)
     send(state.caller, {:agent_event, %{"type" => "aborted"}})
     {:stop, :abort_timeout, state}

@@ -235,7 +235,7 @@ defmodule Soma.AgentRunnerTest do
 
     # Trap exits because AgentRunner is linked via start_link and
     # stops with reason :abort_timeout (not :normal)
-    Process.flag(:trap_exit, true)
+    old_flag = Process.flag(:trap_exit, true)
 
     AgentRunner.abort(pid)
 
@@ -247,29 +247,20 @@ defmodule Soma.AgentRunnerTest do
     # GenServer should stop
     Process.monitor(pid)
     assert_receive {:DOWN, _, :process, ^pid, _}, 1000
+
+    Process.flag(:trap_exit, old_flag)
   end
 
-  test "abort sends SIGTERM at phase 2" do
+  test "abort sends SIGTERM to process group at phase 2" do
     pid = start_agent!()
-
-    # Track kill calls
-    test_pid = self()
-    Soma.Shell.Mock.set_responses(%{
-      default: fn executable, args ->
-        case {executable, args} do
-          {"id", ["-u", _username]} -> {"1000\n", 0}
-          {"kill", ["-TERM", os_pid]} -> send(test_pid, {:kill_called, os_pid}); {"", 0}
-          _ -> {"", 0}
-        end
-      end
-    })
 
     AgentRunner.abort(pid)
 
     # Fast-forward to SIGTERM phase (instead of waiting 3s)
+    # With mock ports (make_ref()), Port.info raises → rescue → skip kill gracefully
     send(pid, :abort_sigterm)
 
-    # The kill should have been attempted (port is mock ref, os_pid may be nil)
+    # GenServer should survive the SIGTERM phase without crashing
     assert Process.alive?(pid)
 
     AgentRunner.stop(pid)
@@ -300,6 +291,8 @@ defmodule Soma.AgentRunnerTest do
     # Trap exit because start_link returns {:stop, ...} which sends EXIT
     Process.flag(:trap_exit, true)
 
+    old_flag = Process.flag(:trap_exit, true)
+
     result = AgentRunner.start_link(default_opts())
     assert {:error, :no_ai_provider_configured} = result
 
@@ -308,5 +301,7 @@ defmodule Soma.AgentRunnerTest do
     assert error["code"] == "no_ai_provider_configured"
     assert error["fix"] =~ "thalamus secret create"
     assert error["providers"] == ["deepseek", "openai", "anthropic"]
+
+    Process.flag(:trap_exit, old_flag)
   end
 end

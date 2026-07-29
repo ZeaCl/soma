@@ -7,7 +7,7 @@ defmodule SomaWeb.AgentSocket do
   alias Soma.Conversations
   alias SomaWeb.Plugs.JWTAuth
 
-  @abort_escape_timeout_ms 8_000
+  @abort_escape_timeout_ms Application.compile_env(:soma, :abort_escape_timeout_ms, 8_000)
 
   # Delegate to JWTAuth for canonical normalization
   defp normalize_user_id(id), do: JWTAuth.normalize_user_id(id)
@@ -27,16 +27,19 @@ defmodule SomaWeb.AgentSocket do
       {:ok, %{"type" => "cancel"}} ->
         if state[:agent_runner] do
           AgentRunner.abort(state.agent_runner)
+
+          # Safety net: si AgentRunner no resuelve el abort en N segundos,
+          # forzar stop del AgentRunner y liberar al frontend
+          timer = Process.send_after(self(), :abort_escape, @abort_escape_timeout_ms)
+
+          {:ok,
+           state
+           |> Map.put(:awaiting_abort, true)
+           |> Map.put(:abort_escape_timer, timer)}
+        else
+          # No runner to abort — client may have sent cancel before init completed
+          {:push, {:text, Jason.encode!(%{type: "cancelled"})}, state}
         end
-
-        # Safety net: si AgentRunner no resuelve el abort en N segundos,
-        # forzar stop del AgentRunner y liberar al frontend
-        timer = Process.send_after(self(), :abort_escape, @abort_escape_timeout_ms)
-
-        {:ok,
-         state
-         |> Map.put(:awaiting_abort, true)
-         |> Map.put(:abort_escape_timer, timer)}
 
       {:ok, %{"type" => "prompt", "text" => text}} ->
         cond do
@@ -82,7 +85,7 @@ defmodule SomaWeb.AgentSocket do
     cancel_abort_escape_timer(state)
 
     {:push, {:text, Jason.encode!(%{type: "cancelled"})},
-     state |> Map.delete(:awaiting_abort) |> Map.delete(:abort_escape_timer)}
+     Map.drop(state, [:awaiting_abort, :abort_escape_timer])}
   end
 
   @impl true
@@ -94,7 +97,7 @@ defmodule SomaWeb.AgentSocket do
     end
 
     {:push, {:text, Jason.encode!(%{type: "cancelled"})},
-     state |> Map.delete(:awaiting_abort) |> Map.delete(:abort_escape_timer)}
+     Map.drop(state, [:awaiting_abort, :abort_escape_timer])}
   end
 
   @impl true
