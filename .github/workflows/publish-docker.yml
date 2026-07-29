@@ -10,7 +10,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, k8s, docker]
     permissions:
       contents: read
       packages: write
@@ -29,4 +29,5 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64
           tags: ${{ env.IMAGE }}:latest
