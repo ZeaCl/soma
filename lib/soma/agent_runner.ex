@@ -169,20 +169,36 @@ defmodule Soma.AgentRunner do
      }}
   end
 
+  @abort_timeout_ms 5_000
+
   @impl true
   def handle_cast(:abort, %{aborted: true} = state), do: {:noreply, state}
 
   @impl true
   def handle_cast(:abort, state) do
-    msg = Jason.encode!(%{type: "abort"}) <> "\n"
-    shell().port_command(state.port, msg)
-    {:noreply, %{state | aborted: true}}
+    # Enviar ambos comandos: abort (LLM) + abort_bash (subprocesos)
+    shell().port_command(state.port, Jason.encode!(%{type: "abort"}) <> "\n")
+    shell().port_command(state.port, Jason.encode!(%{type: "abort_bash"}) <> "\n")
+
+    # Iniciar timer de force-kill por si pi no responde (bloqueado en subproceso)
+    timer = Process.send_after(self(), :abort_timeout, @abort_timeout_ms)
+
+    {:noreply, %{state | aborted: true, abort_timer: timer}}
   end
 
   @impl true
   def handle_cast(:stop, state) do
+    cancel_timer(state)
     shell().port_close(state.port)
     {:stop, :normal, state}
+  end
+
+  @impl true
+  def handle_info(:abort_timeout, state) do
+    Logger.warning("AgentRunner: abort timeout — force-killing pi process")
+    shell().port_close(state.port)
+    send(state.caller, {:agent_event, %{"type" => "aborted"}})
+    {:stop, :abort_timeout, state}
   end
 
   @impl true
@@ -229,6 +245,7 @@ defmodule Soma.AgentRunner do
   defp handle_jsonl(line, %{aborted: true} = state) do
     case Jason.decode(line) do
       {:ok, %{"type" => "agent_end"}} ->
+        cancel_timer(state)
         send(state.caller, {:agent_event, %{"type" => "aborted"}})
         shell().port_close(state.port)
         state
@@ -331,6 +348,12 @@ defmodule Soma.AgentRunner do
   end
 
   defp handle_delta(_, state), do: state
+
+  defp cancel_timer(state) do
+    if state[:abort_timer] do
+      Process.cancel_timer(state.abort_timer)
+    end
+  end
 
   defp resolve_provider_envs(provider_mod, org_id, user_id) do
     Enum.reduce(AIProvider.supported(), {[], []}, fn provider, {vars, available} ->
