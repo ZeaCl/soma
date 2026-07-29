@@ -7,6 +7,8 @@ defmodule SomaWeb.AgentSocket do
   alias Soma.Conversations
   alias SomaWeb.Plugs.JWTAuth
 
+  @abort_escape_timeout_ms 8_000
+
   # Delegate to JWTAuth for canonical normalization
   defp normalize_user_id(id), do: JWTAuth.normalize_user_id(id)
 
@@ -27,7 +29,14 @@ defmodule SomaWeb.AgentSocket do
           AgentRunner.abort(state.agent_runner)
         end
 
-        {:ok, Map.put(state, :awaiting_abort, true)}
+        # Safety net: si AgentRunner no resuelve el abort en N segundos,
+        # forzar stop del AgentRunner y liberar al frontend
+        timer = Process.send_after(self(), :abort_escape, @abort_escape_timeout_ms)
+
+        {:ok,
+         state
+         |> Map.put(:awaiting_abort, true)
+         |> Map.put(:abort_escape_timer, timer)}
 
       {:ok, %{"type" => "prompt", "text" => text}} ->
         cond do
@@ -70,7 +79,22 @@ defmodule SomaWeb.AgentSocket do
 
   @impl true
   def handle_info({:agent_event, %{"type" => "aborted"}}, state) do
-    {:push, {:text, Jason.encode!(%{type: "cancelled"})}, Map.delete(state, :awaiting_abort)}
+    cancel_abort_escape_timer(state)
+
+    {:push, {:text, Jason.encode!(%{type: "cancelled"})},
+     state |> Map.delete(:awaiting_abort) |> Map.delete(:abort_escape_timer)}
+  end
+
+  @impl true
+  def handle_info(:abort_escape, state) do
+    Logger.warning("AgentSocket: abort escape timeout — force-stopping AgentRunner")
+
+    if state[:agent_runner] do
+      AgentRunner.stop(state.agent_runner)
+    end
+
+    {:push, {:text, Jason.encode!(%{type: "cancelled"})},
+     state |> Map.delete(:awaiting_abort) |> Map.delete(:abort_escape_timer)}
   end
 
   @impl true
@@ -124,11 +148,19 @@ defmodule SomaWeb.AgentSocket do
 
   @impl true
   def terminate(_reason, state) do
+    cancel_abort_escape_timer(state)
+
     if state[:agent_runner] do
       AgentRunner.stop(state.agent_runner)
     end
 
     :ok
+  end
+
+  defp cancel_abort_escape_timer(state) do
+    if state[:abort_escape_timer] do
+      Process.cancel_timer(state.abort_escape_timer)
+    end
   end
 
   defp handle_init(agent_id, _conv_id, token, state) do
