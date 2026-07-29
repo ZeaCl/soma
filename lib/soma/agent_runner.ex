@@ -170,6 +170,9 @@ defmodule Soma.AgentRunner do
   end
 
   @impl true
+  def handle_cast(:abort, %{aborted: true} = state), do: {:noreply, state}
+
+  @impl true
   def handle_cast(:abort, state) do
     msg = Jason.encode!(%{type: "abort"}) <> "\n"
     shell().port_command(state.port, msg)

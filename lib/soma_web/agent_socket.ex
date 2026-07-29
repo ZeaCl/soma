@@ -30,24 +30,34 @@ defmodule SomaWeb.AgentSocket do
         {:ok, Map.put(state, :awaiting_abort, true)}
 
       {:ok, %{"type" => "prompt", "text" => text}} ->
-        if state[:agent_runner] do
-          spawn(fn ->
-            case Conversations.add_message(state.conv_id, %{
-                   role: "user",
-                   content: text
-                 }) do
-              {:ok, _} ->
-                :ok
+        cond do
+          state[:awaiting_abort] ->
+            {:push,
+             {:text,
+              Jason.encode!(%{
+                type: "error",
+                message: "Cannot send prompt while abort is in progress"
+              })}, state}
 
-              {:error, reason} ->
-                Logger.error("AgentSocket: failed to save user message: #{inspect(reason)}")
-            end
-          end)
+          state[:agent_runner] ->
+            spawn(fn ->
+              case Conversations.add_message(state.conv_id, %{
+                     role: "user",
+                     content: text
+                   }) do
+                {:ok, _} ->
+                  :ok
 
-          AgentRunner.send_prompt(state.agent_runner, text)
-          {:ok, state}
-        else
-          {:push, {:text, Jason.encode!(%{type: "error", message: "Not initialized"})}, state}
+                {:error, reason} ->
+                  Logger.error("AgentSocket: failed to save user message: #{inspect(reason)}")
+              end
+            end)
+
+            AgentRunner.send_prompt(state.agent_runner, text)
+            {:ok, state}
+
+          true ->
+            {:push, {:text, Jason.encode!(%{type: "error", message: "Not initialized"})}, state}
         end
 
       _ ->
