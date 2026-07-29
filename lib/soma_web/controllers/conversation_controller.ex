@@ -3,6 +3,8 @@ defmodule SomaWeb.ConversationController do
   use Plug.Router
 
   alias Soma.Conversations
+  alias SomaWeb.ConversationView
+  alias SomaWeb.MessageView
   import SomaWeb.Helpers, only: [json: 3]
 
   plug(:match)
@@ -12,7 +14,7 @@ defmodule SomaWeb.ConversationController do
     org_id = conn.assigns[:org_id]
     user_id = conn.assigns[:user_id] || "system"
     convs = Conversations.list(org_id, user_id)
-    json(conn, 200, %{data: convs, total: length(convs)})
+    json(conn, 200, ConversationView.render("index.json", %{conversations: convs}))
   end
 
   get "/:id" do
@@ -24,7 +26,7 @@ defmodule SomaWeb.ConversationController do
 
       conv ->
         messages = Conversations.list_messages(id)
-        json(conn, 200, %{id: conv.id, title: conv.title, messages: messages})
+        json(conn, 200, ConversationView.render("show.json", %{conversation: conv, messages: messages}))
     end
   end
 
@@ -33,7 +35,7 @@ defmodule SomaWeb.ConversationController do
 
     case Conversations.add_message(id, attrs) do
       {:ok, msg} ->
-        json(conn, 201, %{data: msg})
+        json(conn, 201, %{data: MessageView.message_json(msg)})
 
       {:error, cs} ->
         errors = Ecto.Changeset.traverse_errors(cs, fn {msg, _} -> msg end)

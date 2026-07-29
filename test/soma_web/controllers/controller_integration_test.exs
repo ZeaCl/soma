@@ -28,8 +28,24 @@ defmodule SomaWeb.ControllerIntegrationTest do
   test "conversation CRUD flow" do
     list = authed_conn(:get, "/") |> ConversationController.call(ConversationController.init([]))
     assert list.status == 200
+    # Verify camelCase keys in list response (issue #146)
+    list_body = Jason.decode!(list.resp_body)
+    assert is_list(list_body["data"])
+    assert is_integer(list_body["total"])
 
     conv = Conversations.get_or_create(@org_id, @user_id, "agent-ci", "chat")
+
+    # Verify camelCase keys when list has items
+    list2 = authed_conn(:get, "/") |> ConversationController.call(ConversationController.init([]))
+    list2_body = Jason.decode!(list2.resp_body)
+    assert length(list2_body["data"]) > 0
+    item = hd(list2_body["data"])
+    assert Map.has_key?(item, "agentId")
+    assert Map.has_key?(item, "lastMessageAt")
+    assert Map.has_key?(item, "messageCount")
+    refute Map.has_key?(item, "agent_id")
+    refute Map.has_key?(item, "last_message_at")
+    refute Map.has_key?(item, "message_count")
 
     # Post message — use raw_body approach to avoid mixed keys
     post =
@@ -41,14 +57,25 @@ defmodule SomaWeb.ControllerIntegrationTest do
 
     assert post.status in [201, 200]
 
-    # Show with messages
+    # Show with messages — verify camelCase keys (issue #146)
     show =
       authed_conn(:get, "/#{conv.id}")
       |> Plug.Conn.put_private(:plug_route, %{path_params: %{"id" => conv.id}})
       |> ConversationController.call(ConversationController.init([]))
 
     assert show.status == 200
-    assert length(Jason.decode!(show.resp_body)["messages"]) >= 1
+    show_body = Jason.decode!(show.resp_body)
+    # Verify conversation-level camelCase fields (issue #146)
+    assert Map.has_key?(show_body, "agentId")
+    assert Map.has_key?(show_body, "lastMessageAt")
+    assert Map.has_key?(show_body, "messageCount")
+    assert is_list(show_body["messages"])
+    assert length(show_body["messages"]) >= 1
+    msg = hd(show_body["messages"])
+    assert Map.has_key?(msg, "conversationId")
+    assert Map.has_key?(msg, "createdAt")
+    refute Map.has_key?(msg, "conversation_id")
+    refute Map.has_key?(msg, "created_at")
 
     # Post with invalid data triggers validation error
     invalid =
