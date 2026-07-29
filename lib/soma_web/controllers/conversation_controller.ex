@@ -4,6 +4,7 @@ defmodule SomaWeb.ConversationController do
 
   alias Soma.Conversations
   alias SomaWeb.ConversationView
+  alias SomaWeb.MessageView
   import SomaWeb.Helpers, only: [json: 3]
 
   plug(:match)
@@ -34,7 +35,7 @@ defmodule SomaWeb.ConversationController do
 
     case Conversations.add_message(id, attrs) do
       {:ok, msg} ->
-        json(conn, 201, %{data: msg})
+        json(conn, 201, %{data: MessageView.message_json(msg)})
 
       {:error, cs} ->
         errors = Ecto.Changeset.traverse_errors(cs, fn {msg, _} -> msg end)

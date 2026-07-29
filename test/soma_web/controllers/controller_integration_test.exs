@@ -38,15 +38,14 @@ defmodule SomaWeb.ControllerIntegrationTest do
     # Verify camelCase keys when list has items
     list2 = authed_conn(:get, "/") |> ConversationController.call(ConversationController.init([]))
     list2_body = Jason.decode!(list2.resp_body)
-    if length(list2_body["data"]) > 0 do
-      item = hd(list2_body["data"])
-      assert Map.has_key?(item, "agentId")
-      assert Map.has_key?(item, "lastMessageAt")
-      assert Map.has_key?(item, "messageCount")
-      refute Map.has_key?(item, "agent_id")
-      refute Map.has_key?(item, "last_message_at")
-      refute Map.has_key?(item, "message_count")
-    end
+    assert length(list2_body["data"]) > 0
+    item = hd(list2_body["data"])
+    assert Map.has_key?(item, "agentId")
+    assert Map.has_key?(item, "lastMessageAt")
+    assert Map.has_key?(item, "messageCount")
+    refute Map.has_key?(item, "agent_id")
+    refute Map.has_key?(item, "last_message_at")
+    refute Map.has_key?(item, "message_count")
 
     # Post message — use raw_body approach to avoid mixed keys
     post =
@@ -66,6 +65,10 @@ defmodule SomaWeb.ControllerIntegrationTest do
 
     assert show.status == 200
     show_body = Jason.decode!(show.resp_body)
+    # Verify conversation-level camelCase fields (issue #146)
+    assert Map.has_key?(show_body, "agentId")
+    assert Map.has_key?(show_body, "lastMessageAt")
+    assert Map.has_key?(show_body, "messageCount")
     assert is_list(show_body["messages"])
     assert length(show_body["messages"]) >= 1
     msg = hd(show_body["messages"])

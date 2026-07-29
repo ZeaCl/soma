@@ -9,14 +9,14 @@ defmodule SomaWeb.ConversationView do
   end
 
   def render("show.json", %{conversation: conv, messages: msgs}) do
-    %{
-      id: conv.id,
-      title: conv.title,
-      messages: Enum.map(msgs, &MessageView.message_json/1)
-    }
+    conversation_json(conv)
+    |> Map.put(:messages, Enum.map(msgs, &MessageView.message_json/1))
   end
 
   @doc "Convierte un struct %Conversation{} a mapa camelCase."
+  @doc since: "0.3.0"
+  # NOTA: is_deleted y deleted_at se excluyen intencionalmente —
+  # son campos internos de soft-delete, no parte del API contract.
   def conversation_json(conv) do
     %{
       id: conv.id,
