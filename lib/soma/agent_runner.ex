@@ -169,6 +169,7 @@ defmodule Soma.AgentRunner do
      }}
   end
 
+  @abort_sigterm_ms 3_000
   @abort_timeout_ms 5_000
 
   @impl true
@@ -180,17 +181,37 @@ defmodule Soma.AgentRunner do
     shell().port_command(state.port, Jason.encode!(%{type: "abort"}) <> "\n")
     shell().port_command(state.port, Jason.encode!(%{type: "abort_bash"}) <> "\n")
 
-    # Iniciar timer de force-kill por si pi no responde (bloqueado en subproceso)
-    timer = Process.send_after(self(), :abort_timeout, @abort_timeout_ms)
+    # Estrategia en 2 fases por si pi no responde (bloqueado en subproceso):
+    # Fase 1 (3s): SIGTERM al proceso pi
+    # Fase 2 (5s): Kill forzoso del Port (SIGKILL implícito)
+    sigterm_timer = Process.send_after(self(), :abort_sigterm, @abort_sigterm_ms)
+    kill_timer = Process.send_after(self(), :abort_timeout, @abort_timeout_ms)
 
-    {:noreply, %{state | aborted: true, abort_timer: timer}}
+    {:noreply,
+     %{state | aborted: true, abort_sigterm_timer: sigterm_timer, abort_kill_timer: kill_timer}}
   end
 
   @impl true
   def handle_cast(:stop, state) do
-    cancel_timer(state)
+    cancel_timers(state)
     shell().port_close(state.port)
     {:stop, :normal, state}
+  end
+
+  @impl true
+  def handle_info(:abort_sigterm, state) do
+    Logger.warning("AgentRunner: abort phase 2 — sending SIGTERM to pi process")
+
+    # Obtener OS PID del Port y enviar SIGTERM
+    case Port.info(state.port, :os_pid) do
+      {:os_pid, os_pid} when is_integer(os_pid) and os_pid > 0 ->
+        System.cmd("kill", ["-TERM", "#{os_pid}"])
+
+      _ ->
+        Logger.warning("AgentRunner: could not get OS PID for port, skipping SIGTERM")
+    end
+
+    {:noreply, state}
   end
 
   @impl true
@@ -217,6 +238,7 @@ defmodule Soma.AgentRunner do
   @impl true
   def handle_info({port, {:exit_status, status}}, %{port: port, aborted: true} = state) do
     Logger.info("AgentRunner port exited with status #{status} (aborted)")
+    cancel_timers(state)
     {:stop, :normal, state}
   end
 
@@ -245,7 +267,7 @@ defmodule Soma.AgentRunner do
   defp handle_jsonl(line, %{aborted: true} = state) do
     case Jason.decode(line) do
       {:ok, %{"type" => "agent_end"}} ->
-        cancel_timer(state)
+        cancel_timers(state)
         send(state.caller, {:agent_event, %{"type" => "aborted"}})
         shell().port_close(state.port)
         state
@@ -349,10 +371,9 @@ defmodule Soma.AgentRunner do
 
   defp handle_delta(_, state), do: state
 
-  defp cancel_timer(state) do
-    if state[:abort_timer] do
-      Process.cancel_timer(state.abort_timer)
-    end
+  defp cancel_timers(state) do
+    if state[:abort_sigterm_timer], do: Process.cancel_timer(state.abort_sigterm_timer)
+    if state[:abort_kill_timer], do: Process.cancel_timer(state.abort_kill_timer)
   end
 
   defp resolve_provider_envs(provider_mod, org_id, user_id) do
