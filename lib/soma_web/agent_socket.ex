@@ -27,24 +27,37 @@ defmodule SomaWeb.AgentSocket do
           AgentRunner.abort(state.agent_runner)
         end
 
-        {:push, {:text, Jason.encode!(%{type: "cancelled"})}, state}
+        {:ok, Map.put(state, :awaiting_abort, true)}
 
       {:ok, %{"type" => "prompt", "text" => text}} ->
-        if state[:agent_runner] do
-          spawn(fn ->
-            case Conversations.add_message(state.conv_id, %{
-              role: "user",
-              content: text
-            }) do
-              {:ok, _} -> :ok
-              {:error, reason} -> Logger.error("AgentSocket: failed to save user message: #{inspect(reason)}")
-            end
-          end)
+        cond do
+          state[:awaiting_abort] ->
+            {:push,
+             {:text,
+              Jason.encode!(%{
+                type: "error",
+                message: "Cannot send prompt while abort is in progress"
+              })}, state}
 
-          AgentRunner.send_prompt(state.agent_runner, text)
-          {:ok, state}
-        else
-          {:push, {:text, Jason.encode!(%{type: "error", message: "Not initialized"})}, state}
+          state[:agent_runner] ->
+            spawn(fn ->
+              case Conversations.add_message(state.conv_id, %{
+                     role: "user",
+                     content: text
+                   }) do
+                {:ok, _} ->
+                  :ok
+
+                {:error, reason} ->
+                  Logger.error("AgentSocket: failed to save user message: #{inspect(reason)}")
+              end
+            end)
+
+            AgentRunner.send_prompt(state.agent_runner, text)
+            {:ok, state}
+
+          true ->
+            {:push, {:text, Jason.encode!(%{type: "error", message: "Not initialized"})}, state}
         end
 
       _ ->
@@ -54,6 +67,16 @@ defmodule SomaWeb.AgentSocket do
 
   @impl true
   def handle_in(_frame, state), do: {:ok, state}
+
+  @impl true
+  def handle_info({:agent_event, %{"type" => "aborted"}}, state) do
+    {:push, {:text, Jason.encode!(%{type: "cancelled"})}, Map.delete(state, :awaiting_abort)}
+  end
+
+  @impl true
+  def handle_info({:agent_event, _event}, %{awaiting_abort: true} = state) do
+    {:ok, state}
+  end
 
   @impl true
   def handle_info(
@@ -70,13 +93,16 @@ defmodule SomaWeb.AgentSocket do
       tools = if Enum.empty?(final_tools), do: nil, else: final_tools
 
       case Conversations.add_message(state.conv_id, %{
-        role: "assistant",
-        content: if(final_text != "", do: final_text, else: "(sin respuesta)"),
-        thinking: if(final_thinking != "", do: final_thinking, else: nil),
-        tools: tools
-      }) do
-        {:ok, _} -> :ok
-        {:error, reason} -> Logger.error("AgentSocket: failed to save assistant message: #{inspect(reason)}")
+             role: "assistant",
+             content: if(final_text != "", do: final_text, else: "(sin respuesta)"),
+             thinking: if(final_thinking != "", do: final_thinking, else: nil),
+             tools: tools
+           }) do
+        {:ok, _} ->
+          :ok
+
+        {:error, reason} ->
+          Logger.error("AgentSocket: failed to save assistant message: #{inspect(reason)}")
       end
     end)
 

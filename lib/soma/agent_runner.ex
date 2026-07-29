@@ -103,7 +103,9 @@ defmodule Soma.AgentRunner do
               pi_args
           end
 
-        pi_cmd = "cd #{home} && #{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
+        pi_cmd =
+          "cd #{home} && #{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
+
         args = ["-u", username, "bash", "-c", pi_cmd]
 
         Logger.info("AgentRunner: sudo #{Enum.join(args, " ")}")
@@ -122,6 +124,7 @@ defmodule Soma.AgentRunner do
            caller: caller,
            agent_id: agent_id,
            buffer: "",
+           aborted: false,
            in_thinking: false,
            current_text: "",
            current_thinking: "",
@@ -134,11 +137,16 @@ defmodule Soma.AgentRunner do
       {:error, reason} ->
         Logger.error("AgentRunner: failed to create sandbox for #{agent_id}: #{reason}")
 
-        send(caller, {:agent_event,
-          %{"type" => "error",
-            "code" => "sandbox_create_failed",
-            "message" => "Failed to create sandbox user: #{reason}",
-            "fix" => "zea soma sandbox create #{agent_id} --org #{org_id} --type agent"}})
+        send(
+          caller,
+          {:agent_event,
+           %{
+             "type" => "error",
+             "code" => "sandbox_create_failed",
+             "message" => "Failed to create sandbox user: #{reason}",
+             "fix" => "zea soma sandbox create #{agent_id} --org #{org_id} --type agent"
+           }}
+        )
 
         {:stop, :sandbox_create_failed}
     end
@@ -162,10 +170,13 @@ defmodule Soma.AgentRunner do
   end
 
   @impl true
+  def handle_cast(:abort, %{aborted: true} = state), do: {:noreply, state}
+
+  @impl true
   def handle_cast(:abort, state) do
     msg = Jason.encode!(%{type: "abort"}) <> "\n"
     shell().port_command(state.port, msg)
-    {:noreply, state}
+    {:noreply, %{state | aborted: true}}
   end
 
   @impl true
@@ -185,6 +196,12 @@ defmodule Soma.AgentRunner do
       end)
 
     {:noreply, new_state}
+  end
+
+  @impl true
+  def handle_info({port, {:exit_status, status}}, %{port: port, aborted: true} = state) do
+    Logger.info("AgentRunner port exited with status #{status} (aborted)")
+    {:stop, :normal, state}
   end
 
   @impl true
@@ -208,6 +225,18 @@ defmodule Soma.AgentRunner do
   end
 
   defp handle_jsonl("", state), do: state
+
+  defp handle_jsonl(line, %{aborted: true} = state) do
+    case Jason.decode(line) do
+      {:ok, %{"type" => "agent_end"}} ->
+        send(state.caller, {:agent_event, %{"type" => "aborted"}})
+        shell().port_close(state.port)
+        state
+
+      _ ->
+        state
+    end
+  end
 
   defp handle_jsonl(line, state) do
     case Jason.decode(line) do
