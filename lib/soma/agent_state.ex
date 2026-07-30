@@ -191,9 +191,9 @@ defmodule Soma.AgentState do
     host = Keyword.get(config, :host, "redis")
     port = Keyword.get(config, :port, 6379)
     password = Keyword.get(config, :password)
-    db = Keyword.get(config, :db, 0)
+    db = Keyword.get(config, :database, 0)
 
-    opts = [host: host, port: port, db: db]
+    opts = [host: host, port: port, database: db]
     opts = if password, do: Keyword.put(opts, :password, password), else: opts
     opts
   end
