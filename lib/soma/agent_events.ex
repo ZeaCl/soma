@@ -26,10 +26,9 @@ defmodule Soma.AgentEvents do
   ```
   """
 
-  @spec_version "1.0"
+  require Logger
 
-  @valid_statuses ~w(running idle done error)
-  @valid_event_types ~w(agent.status agent.progress agent.tool agent.error)
+  @spec_version "1.0"
 
   @doc """
   Publica un evento en el canal Redis `agents:events`.
@@ -37,22 +36,24 @@ defmodule Soma.AgentEvents do
   Todos los consumidores (dashboard, notificaciones, orquestador)
   se suscriben a este canal y reciben el mismo formato.
   """
-  @spec publish(map()) :: :ok | {:error, term()}
+  @spec publish(map()) :: :ok
   def publish(event) do
-    with :ok <- validate_event(event),
-         {:ok, payload} <- Jason.encode(event) do
-      case redix_pubsub() do
-        {:ok, conn} ->
-          Redix.PubSub.publish(conn, "agents:events", payload)
-          :ok
+    # Spawn async to avoid blocking the AgentRunner on Redis latency
+    Task.start(fn ->
+      with :ok <- validate_event(event),
+           {:ok, payload} <- Jason.encode(event) do
+        case start_redix() do
+          {:ok, conn} ->
+            Redix.command(conn, ["PUBLISH", "agents:events", payload])
+            Redix.stop(conn)
 
-        {:error, reason} ->
-          # Fallback: Redis no disponible → loggear y seguir
-          require Logger
-          Logger.warning("AgentEvents: Redis no disponible (#{inspect(reason)}), evento droppeado")
-          :ok
+          {:error, reason} ->
+            Logger.warning("AgentEvents: Redis no disponible (#{inspect(reason)})")
+        end
       end
-    end
+    end)
+
+    :ok
   end
 
   @doc """
@@ -94,19 +95,7 @@ defmodule Soma.AgentEvents do
     end
   end
 
-  # ── Redis connection ────────────────────────────────────────
-
-  defp redix_pubsub do
-    case Process.get(:redix_pubsub) do
-      nil ->
-        conn = start_redix()
-        Process.put(:redix_pubsub, conn)
-        conn
-
-      conn ->
-        conn
-    end
-  end
+  # ── Redis connection (transient, for publishing) ────────────
 
   defp start_redix do
     redis_config = Application.get_env(:soma, :redis, [])
@@ -114,8 +103,9 @@ defmodule Soma.AgentEvents do
     opts =
       redis_config
       |> Enum.into([])
+      |> Keyword.put(:sync_connect, true)
       |> Keyword.put(:socket_opts, [connect_timeout: 2000])
 
-    Redix.PubSub.start_link(opts)
+    Redix.start_link(opts)
   end
 end
