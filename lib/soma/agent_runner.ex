@@ -8,6 +8,7 @@ defmodule Soma.AgentRunner do
 
   alias Soma.Sandbox
   alias Soma.AIProvider
+  alias Soma.AgentEvents
 
   defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
   defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
@@ -39,6 +40,8 @@ defmodule Soma.AgentRunner do
     token = Keyword.fetch!(opts, :token)
     org_id = Keyword.fetch!(opts, :org_id)
     user_id = Keyword.fetch!(opts, :user_id)
+    workspace = Keyword.get(opts, :workspace, "")
+    issue = Keyword.get(opts, :issue)
 
     # Ensure sandbox exists before running the agent (idempotent)
     with {:ok, _uid, _home} <- Sandbox.create(agent_id, org_id) do
@@ -46,6 +49,14 @@ defmodule Soma.AgentRunner do
       home = Sandbox.home_dir(agent_id)
 
       Soma.AgentMetrics.session_started(agent_id, "pi")
+
+      # Build agent_info for AgentEvents
+      agent_info = [
+        agent_id: agent_id,
+        workspace: workspace,
+        issue: issue,
+        runtime_version: "0.42.0"
+      ]
 
       secret_provider = Application.get_env(:soma, :secret_provider, Soma.SecretProvider.Thalamus)
 
@@ -118,11 +129,16 @@ defmodule Soma.AgentRunner do
 
         send(caller, {:agent_event, %{"type" => "ready"}})
 
+        # Publish AgentEvent: agent started
+        AgentEvents.from_pi_event(:agent_start, agent_info)
+        |> AgentEvents.publish()
+
         {:ok,
          %{
            port: port,
            caller: caller,
            agent_id: agent_id,
+           agent_info: agent_info,
            buffer: "",
            aborted: false,
            in_thinking: false,
@@ -247,6 +263,11 @@ defmodule Soma.AgentRunner do
     Logger.warning("AgentRunner: abort timeout — force-killing pi process")
     cancel_timers(state)
     shell().port_close(state.port)
+
+    # Publish AgentEvent: agent aborted
+    AgentEvents.from_pi_event(:agent_aborted, state.agent_info, %{})
+    |> AgentEvents.publish()
+
     send(state.caller, {:agent_event, %{"type" => "aborted"}})
     {:stop, :abort_timeout, state}
   end
@@ -274,6 +295,12 @@ defmodule Soma.AgentRunner do
   @impl true
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
     Logger.info("AgentRunner port exited with status #{status}")
+
+    # Publish AgentEvent: agent crashed
+    AgentEvents.from_pi_event(:agent_error, state.agent_info, %{
+      message: "Agent process exited with code #{status}"
+    })
+    |> AgentEvents.publish()
 
     send(
       state.caller,
@@ -335,6 +362,13 @@ defmodule Soma.AgentRunner do
           duration = System.monotonic_time(:millisecond) - state.prompt_start
           Soma.AgentMetrics.response_duration(state.agent_id, "pi", duration)
         end
+
+        # Publish AgentEvent: agent finished successfully
+        AgentEvents.from_pi_event(:agent_end, state.agent_info, %{
+          result: "success",
+          last_action: "Agent finished"
+        })
+        |> AgentEvents.publish()
 
         send(
           state.caller,

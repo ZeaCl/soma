@@ -50,6 +50,7 @@ defmodule Soma.MixProject do
       {:excoveralls, "~> 0.18", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:redix, "~> 1.5"},
       {:prom_ex, "~> 1.11"},
       {:opentelemetry, "~> 1.4"},
       {:opentelemetry_api, "~> 1.3"},
