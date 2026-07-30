@@ -23,6 +23,25 @@ config :soma, :thalamus,
 
 config :soma, :agent_host, System.get_env("AGENT_HOST", "http://zea-agent:3001")
 
+# ── Redis (AgentEvents pub/sub + AgentState cache) ───────────────
+redis_url = System.get_env("REDIS_URL")
+
+if redis_url do
+  uri = URI.parse(redis_url)
+
+  config :soma, :redis,
+    host: uri.host || "redis",
+    port: uri.port || 6379,
+    password: uri.password || System.get_env("REDIS_PASSWORD"),
+    db: 0
+else
+  config :soma, :redis,
+    host: System.get_env("REDIS_HOST", "redis"),
+    port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
+    password: System.get_env("REDIS_PASSWORD"),
+    db: 0
+end
+
 config :soma, :workspace_root, System.get_env("WORKSPACE_ROOT", "/home/orgs")
 config :soma, :org_workspace_root, System.get_env("WORKSPACE_ROOT", "/home/orgs")
 

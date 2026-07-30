@@ -10,6 +10,7 @@ defmodule Soma.Application do
     children = [
       Soma.Repo,
       {Phoenix.PubSub, name: Soma.PubSub},
+      Soma.AgentState,
       SomaWeb.Endpoint
     ]
 

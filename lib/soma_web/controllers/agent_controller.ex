@@ -86,7 +86,7 @@ defmodule SomaWeb.AgentController do
   end
 
   get "/:id" do
-    case Skills.get_agent(id) do
+    case AgentDashboard.get_agent(id) do
       {:ok, agent} -> json(conn, 200, %{data: agent})
       {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
     end
