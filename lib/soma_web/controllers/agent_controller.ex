@@ -2,7 +2,7 @@ defmodule SomaWeb.AgentController do
   @moduledoc "Agent CRUD + sharing endpoints."
   use Plug.Router
 
-  alias Soma.{AgentShares, Sandbox, Skills}
+  alias Soma.{AgentDashboard, AgentShares, Sandbox, Skills}
   import SomaWeb.Helpers, only: [json: 3, get_token: 1]
 
   plug(:match)
@@ -10,8 +10,9 @@ defmodule SomaWeb.AgentController do
 
   get "/" do
     token = get_token(conn)
+    org_id = conn.assigns[:org_id]
 
-    case Skills.list_agents(token) do
+    case AgentDashboard.list_agents(token, org_id) do
       {:ok, agents} -> json(conn, 200, %{data: agents})
     end
   end
