@@ -90,6 +90,24 @@ defmodule SomaWeb.SandboxController do
     })
   end
 
+  delete "/delete" do
+    org_id = conn.assigns[:org_id]
+    path = conn.params["path"] || ""
+    owner_type = conn.params["owner_type"] || "agent"
+    owner_id = conn.params["owner_id"]
+
+    if owner_id == nil || owner_id == "" do
+      json(conn, 400, %{error: "owner_id required"})
+    else
+      case Workspace.delete_workspace_file(owner_type, owner_id, org_id, path) do
+        {:ok, _} -> json(conn, 200, %{ok: true})
+        {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
+        {:error, :path_traversal} -> json(conn, 403, %{error: "forbidden"})
+        _ -> json(conn, 500, %{error: "Unexpected error"})
+      end
+    end
+  end
+
   match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
 
   defp do_create_sandbox(conn, attrs) do
