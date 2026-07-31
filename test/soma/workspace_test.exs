@@ -60,6 +60,17 @@ defmodule Soma.WorkspaceTest do
     assert {:error, :directory_not_empty} = Workspace.delete(@org, "full-dir")
   end
 
+  test "delete empty directory succeeds (soft-delete)" do
+    Workspace.mkdir(@org, "empty-dir")
+    assert {:ok, "empty-dir"} = Workspace.delete(@org, "empty-dir")
+    assert {:error, :not_found} = Workspace.read_file(@org, "empty-dir")
+  end
+
+  test "delete rejects empty path" do
+    assert {:error, :invalid_path} = Workspace.delete(@org, "")
+    assert {:error, :invalid_path} = Workspace.delete(@org, nil)
+  end
+
   test "path traversal blocked" do
     assert {:error, :path_traversal} = Workspace.resolve(@org, "../../etc/passwd")
     assert {:error, :path_traversal} = Workspace.resolve(@org, "../other-org/secrets")

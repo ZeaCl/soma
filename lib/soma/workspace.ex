@@ -207,11 +207,27 @@ defmodule Soma.Workspace do
   # ── Delete ────────────────────────────────────
 
   def delete(org_id, relative_path) do
-    with {:ok, full} <- resolve(org_id, relative_path),
-         true <- fs().exists?(full) do
-      do_soft_delete(org_id, full, relative_path)
+    if empty_path?(relative_path) do
+      {:error, :invalid_path}
     else
-      _ -> {:error, :not_found}
+      with {:ok, full} <- resolve(org_id, relative_path),
+           true <- fs().exists?(full) do
+        if fs().dir?(full) and not dir_empty?(full) do
+          {:error, :directory_not_empty}
+        else
+          do_soft_delete(org_id, full, relative_path)
+        end
+      else
+        _ -> {:error, :not_found}
+      end
+    end
+  end
+
+  defp dir_empty?(dir) do
+    case fs().ls(dir) do
+      {:ok, []} -> true
+      {:ok, entries} -> Enum.all?(entries, &String.starts_with?(&1, "."))
+      _ -> false
     end
   end
 
