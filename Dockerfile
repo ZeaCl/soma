@@ -16,7 +16,7 @@ RUN mix compile
 RUN mix release
 
 FROM alpine:3.21.3 AS runtime
-RUN apk add --no-cache ncurses-libs openssl libstdc++ bash nodejs npm git docker-cli docker-cli-compose shadow sudo
+RUN apk add --no-cache ncurses-libs openssl libstdc++ bash nodejs npm git docker-cli docker-cli-compose shadow sudo python3 py3-pip curl
 WORKDIR /app
 
 # ── Pi CLI (global, para subprocesos pi --mode rpc) ─────────────────
