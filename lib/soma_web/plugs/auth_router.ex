@@ -18,6 +18,7 @@ defmodule SomaWeb.Plugs.AuthRouter do
   # ── Files (unified) — DEBE ir ANTES de /files genérico ──
   forward("/files/unified", to: SomaWeb.SandboxController)
   forward("/files/unified/upload", to: SomaWeb.SandboxController)
+  forward("/files/unified/delete", to: SomaWeb.SandboxController)
 
   # ── Files ──
   forward("/files", to: SomaWeb.FileController)

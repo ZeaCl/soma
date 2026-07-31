@@ -60,6 +60,17 @@ defmodule Soma.WorkspaceTest do
     assert {:error, :directory_not_empty} = Workspace.delete(@org, "full-dir")
   end
 
+  test "delete empty directory succeeds (soft-delete)" do
+    Workspace.mkdir(@org, "empty-dir")
+    assert {:ok, "empty-dir"} = Workspace.delete(@org, "empty-dir")
+    assert {:error, :not_found} = Workspace.read_file(@org, "empty-dir")
+  end
+
+  test "delete rejects empty path" do
+    assert {:error, :invalid_path} = Workspace.delete(@org, "")
+    assert {:error, :invalid_path} = Workspace.delete(@org, nil)
+  end
+
   test "path traversal blocked" do
     assert {:error, :path_traversal} = Workspace.resolve(@org, "../../etc/passwd")
     assert {:error, :path_traversal} = Workspace.resolve(@org, "../other-org/secrets")
@@ -100,5 +111,43 @@ defmodule Soma.WorkspaceTest do
 
   test "push returns not_configured when no remote" do
     assert {:ok, :not_configured} = Workspace.push(@org)
+  end
+
+  # ── delete_workspace_file/4 ──────────────────────────────────────
+
+  describe "delete_workspace_file/4" do
+    setup do
+      shared = Path.join(Workspace.org_path(@org), "shared")
+      File.mkdir_p!(shared)
+      :ok
+    end
+
+    test "deletes file from org shared/ base (soft-delete)" do
+      shared = Path.join(Workspace.org_path(@org), "shared")
+      File.write!(Path.join(shared, "org_file.txt"), "org content")
+
+      assert {:ok, "org_file.txt"} =
+               Workspace.delete_workspace_file("org", nil, @org, "org_file.txt")
+
+      refute File.exists?(Path.join(shared, "org_file.txt"))
+    end
+
+    test "returns not_found for missing file" do
+      assert {:error, :not_found} =
+               Workspace.delete_workspace_file("org", nil, @org, "no_such_file.txt")
+    end
+
+    test "blocks path traversal" do
+      assert {:error, :path_traversal} =
+               Workspace.delete_workspace_file("org", nil, @org, "../../etc/passwd")
+    end
+
+    test "rejects empty path" do
+      assert {:error, :invalid_path} =
+               Workspace.delete_workspace_file("org", nil, @org, "")
+
+      assert {:error, :invalid_path} =
+               Workspace.delete_workspace_file("org", nil, @org, nil)
+    end
   end
 end

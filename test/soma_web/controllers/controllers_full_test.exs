@@ -368,4 +368,38 @@ defmodule SomaWeb.ControllersFullTest do
 
     assert conn.status == 200
   end
+
+  test "sandbox unified delete returns 200 for org file" do
+    Workspace.ensure_org(@org_id)
+
+    # Crear archivo en shared/ (misma base que usa list_files para org)
+    shared = Path.join(Workspace.org_path(@org_id), "shared")
+    File.mkdir_p!(shared)
+    File.write!(Path.join(shared, "to_delete.txt"), "bye")
+
+    conn =
+      authed(:delete, "/delete?owner_type=org&owner_id=&path=to_delete.txt")
+      |> SandboxController.call(SandboxController.init([]))
+
+    assert conn.status == 200
+    refute File.exists?(Path.join(shared, "to_delete.txt"))
+  end
+
+  test "sandbox unified delete returns 404 for missing file" do
+    Workspace.ensure_org(@org_id)
+
+    conn =
+      authed(:delete, "/delete?owner_type=org&owner_id=&path=does_not_exist.txt")
+      |> SandboxController.call(SandboxController.init([]))
+
+    assert conn.status == 404
+  end
+
+  test "sandbox unified delete returns 400 for missing owner_id" do
+    conn =
+      authed(:delete, "/delete?owner_type=org&path=test.txt")
+      |> SandboxController.call(SandboxController.init([]))
+
+    assert conn.status == 400
+  end
 end

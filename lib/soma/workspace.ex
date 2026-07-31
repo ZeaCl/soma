@@ -73,6 +73,35 @@ defmodule Soma.Workspace do
     org_path(org_id)
   end
 
+  # ── Delete (unified) ───────────────────────
+
+  @doc """
+  Elimina archivo usando workspace_base (misma base que list_files).
+  owner_type: "user" | "agent" | "org"
+  """
+  def delete_workspace_file(owner_type, owner_id, org_id, relative_path) do
+    if empty_path?(relative_path) do
+      {:error, :invalid_path}
+    else
+      base = workspace_base(owner_type, owner_id, org_id)
+      full = Path.expand(Path.join(base, relative_path))
+
+      if String.starts_with?(full, base) do
+        if fs().exists?(full) do
+          do_soft_delete(org_id, full, relative_path)
+        else
+          {:error, :not_found}
+        end
+      else
+        {:error, :path_traversal}
+      end
+    end
+  end
+
+  defp empty_path?(nil), do: true
+  defp empty_path?(""), do: true
+  defp empty_path?(_), do: false
+
   # ── Legacy (backward compat) ─────────────────
 
   def list_files_per_agent(org_id, agent_id, sub_path \\ "") do
@@ -178,37 +207,57 @@ defmodule Soma.Workspace do
   # ── Delete ────────────────────────────────────
 
   def delete(org_id, relative_path) do
-    with {:ok, full} <- resolve(org_id, relative_path),
-         true <- fs().exists?(full) do
-      # Soft-delete: mover a .trash/ en vez de borrado físico
-      trash_dir = Path.join(org_path(org_id), ".trash")
-      fs().mkdir_p(trash_dir)
-
-      timestamp = DateTime.utc_now() |> DateTime.to_unix(:millisecond)
-      basename = Path.basename(relative_path)
-      trash_name = "#{timestamp}_#{basename}"
-      trash_path = Path.join(trash_dir, trash_name)
-
-      # Si el archivo ya existe en trash, agregar sufijo numérico
-      trash_path =
-        if fs().exists?(trash_path) do
-          ext = Path.extname(basename)
-          base = Path.rootname(basename)
-          Path.join(trash_dir, "#{timestamp}_#{base}_1#{ext}")
-        else
-          trash_path
-        end
-
-      case fs().rename(full, trash_path) do
-        :ok ->
-          git_commit(org_id, "delete (soft): #{relative_path} -> .trash/#{trash_name}")
-          {:ok, relative_path}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
+    if empty_path?(relative_path) do
+      {:error, :invalid_path}
     else
-      _ -> {:error, :not_found}
+      with {:ok, full} <- resolve(org_id, relative_path),
+           true <- fs().exists?(full) do
+        if fs().dir?(full) and not dir_empty?(full) do
+          {:error, :directory_not_empty}
+        else
+          do_soft_delete(org_id, full, relative_path)
+        end
+      else
+        _ -> {:error, :not_found}
+      end
+    end
+  end
+
+  defp dir_empty?(dir) do
+    case fs().ls(dir) do
+      {:ok, []} -> true
+      {:ok, entries} -> Enum.all?(entries, &String.starts_with?(&1, "."))
+      _ -> false
+    end
+  end
+
+  # ── Soft-delete helper ────────────────────────
+
+  defp do_soft_delete(org_id, full, relative_path) do
+    trash_dir = Path.join(org_path(org_id), ".trash")
+    fs().mkdir_p(trash_dir)
+
+    timestamp = DateTime.to_unix(DateTime.utc_now(), :millisecond)
+    basename = Path.basename(relative_path)
+    trash_name = "#{timestamp}_#{basename}"
+
+    # Si el archivo ya existe en trash, agregar sufijo numérico
+    trash_path =
+      if fs().exists?(Path.join(trash_dir, trash_name)) do
+        ext = Path.extname(basename)
+        base = Path.rootname(basename)
+        Path.join(trash_dir, "#{timestamp}_#{base}_1#{ext}")
+      else
+        Path.join(trash_dir, trash_name)
+      end
+
+    case fs().rename(full, trash_path) do
+      :ok ->
+        git_commit(org_id, "delete (soft): #{relative_path} -> .trash/#{trash_name}")
+        {:ok, relative_path}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
