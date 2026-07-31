@@ -116,5 +116,27 @@ defmodule SomaWeb.FileController do
     end
   end
 
+  # ── Trash (soft-delete) ──────────────────────
+
+  get "/trash" do
+    case Workspace.list_trash(conn.assigns[:org_id]) do
+      {:ok, files} ->
+        json(conn, 200, %{files: format_file_list(files)})
+    end
+  end
+
+  post "/trash/recover" do
+    attrs = conn.body_params
+
+    case Workspace.recover_from_trash(
+           conn.assigns[:org_id],
+           attrs["trash_filename"],
+           attrs["target_path"]
+         ) do
+      {:ok, path} -> json(conn, 200, %{ok: true, path: path})
+      {:error, reason} -> json(conn, 500, %{error: inspect(reason)})
+    end
+  end
+
   match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
 end
