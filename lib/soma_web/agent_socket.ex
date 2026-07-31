@@ -166,16 +166,22 @@ defmodule SomaWeb.AgentSocket do
     end
   end
 
-  defp handle_init(agent_id, _conv_id, token, state) do
+  defp handle_init(agent_id, conv_id, token, state) do
     case JWTAuth.verify_token(token) do
       {:ok, claims, org_id} ->
         Logger.info("AgentSocket: Init agent=#{agent_id} org=#{org_id}")
 
         user_id = normalize_user_id(claims["sub"])
 
-        # Resolver la conversación real (UUID) — el cid del cliente puede ser
-        # un string arbitrario (ej. "cli-{timestamp}"), no un UUID válido para Ecto.
-        conversation = Conversations.get_or_create(org_id, user_id, agent_id, "chat")
+        # Usar el cid del cliente como app_context para permitir múltiples
+        # conversaciones por usuario+agente. Fallback a "chat" para
+        # compatibilidad con conversaciones existentes.
+        app_context =
+          if conv_id in [nil, "", "chat"],
+            do: "chat",
+            else: conv_id
+
+        conversation = Conversations.get_or_create(org_id, user_id, agent_id, app_context)
 
         case AgentRunner.start_link(
                caller: self(),

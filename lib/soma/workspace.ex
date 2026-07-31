@@ -180,28 +180,67 @@ defmodule Soma.Workspace do
   def delete(org_id, relative_path) do
     with {:ok, full} <- resolve(org_id, relative_path),
          true <- fs().exists?(full) do
-      result =
-        if fs().dir?(full) do
-          case fs().ls(full) do
-            {:ok, []} ->
-              fs().rmdir(full)
-              :ok
+      # Soft-delete: mover a .trash/ en vez de borrado físico
+      trash_dir = Path.join(org_path(org_id), ".trash")
+      fs().mkdir_p(trash_dir)
 
-            _ ->
-              :directory_not_empty
-          end
+      timestamp = DateTime.utc_now() |> DateTime.to_unix(:millisecond)
+      basename = Path.basename(relative_path)
+      trash_name = "#{timestamp}_#{basename}"
+      trash_path = Path.join(trash_dir, trash_name)
+
+      # Si el archivo ya existe en trash, agregar sufijo numérico
+      trash_path =
+        if fs().exists?(trash_path) do
+          ext = Path.extname(basename)
+          base = Path.rootname(basename)
+          Path.join(trash_dir, "#{timestamp}_#{base}_1#{ext}")
         else
-          fs().rm(full)
-          :ok
+          trash_path
         end
 
-      case result do
+      case fs().rename(full, trash_path) do
         :ok ->
-          git_commit(org_id, "delete: #{relative_path}")
+          git_commit(org_id, "delete (soft): #{relative_path} -> .trash/#{trash_name}")
           {:ok, relative_path}
 
-        :directory_not_empty ->
-          {:error, :directory_not_empty}
+        {:error, reason} ->
+          {:error, reason}
+      end
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  @doc "Lista archivos en la papelera (.trash/)."
+  def list_trash(org_id) do
+    trash_dir = Path.join(org_path(org_id), ".trash")
+
+    if fs().dir?(trash_dir) do
+      {:ok, scan_dir(trash_dir, trash_dir, "")}
+    else
+      {:ok, []}
+    end
+  end
+
+  @doc "Restaura un archivo de la papelera a su ubicación original."
+  def recover_from_trash(org_id, trash_filename, target_path) do
+    trash_dir = Path.join(org_path(org_id), ".trash")
+    trash_full = Path.join(trash_dir, trash_filename)
+
+    with {:ok, target_full} <- resolve(org_id, target_path),
+         true <- fs().exists?(trash_full) do
+      # Asegurar que el directorio destino existe
+      target_dir = Path.dirname(target_full)
+      fs().mkdir_p(target_dir)
+
+      case fs().rename(trash_full, target_full) do
+        :ok ->
+          git_commit(org_id, "recover: #{target_path} from trash")
+          {:ok, target_path}
+
+        {:error, reason} ->
+          {:error, reason}
       end
     else
       _ -> {:error, :not_found}

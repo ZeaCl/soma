@@ -8,7 +8,7 @@ defmodule Soma.AgentDashboard do
   last_action, progress, result) sin acoplarse a pi.
   """
   import Ecto.Query
-  alias Soma.{AgentState, Repo, Conversation}
+  alias Soma.{AgentState, Repo, Conversation, Sandbox}
 
   @doc """
   Lista agentes con datos del dashboard en formato AgentEvent v1.0.
@@ -39,6 +39,49 @@ defmodule Soma.AgentDashboard do
   defp fallback_from_thalamus(token, org_id) do
     case thalamus_client().get_user(token) do
       {:ok, agents} when is_list(agents) ->
+        # Asegurar sandbox + skills para cada agente (solo si no existe)
+        Enum.each(agents, fn agent ->
+          agent_id = agent["id"]
+          home = Sandbox.home_dir(agent_id)
+          config = agent["agent_config"] || %{}
+
+          unless File.dir?(home) do
+            case Sandbox.create(agent_id, org_id,
+                   teams: agent["teams"] || "",
+                   mounts: agent["mounts"] || []
+                 ) do
+              {:ok, _uid, ^home} ->
+                skill_names = config["skills"] || config["skillNames"] || []
+
+                for name <- skill_names do
+                  src = Path.join(["/root/.agents/skills", name])
+                  dst = Path.join([home, "skills", name])
+
+                  if File.dir?(src) do
+                    File.mkdir_p!(dst)
+                    File.cp_r!(src, dst)
+                  end
+                end
+
+                # Crear .pi/agent/config.json para el runtime
+                cfg_dir = Path.join([home, ".pi", "agent"])
+                File.mkdir_p!(cfg_dir)
+                File.write!(
+                  Path.join(cfg_dir, "config.json"),
+                  Jason.encode!(%{
+                    "skills" => skill_names,
+                    "system_prompt" => config["system_prompt"],
+                    "engine" => config["engine"] || "pi",
+                    "created_at" => DateTime.to_iso8601(DateTime.utc_now())
+                  }, pretty: true)
+                )
+
+              {:error, _} ->
+                :ok
+            end
+          end
+        end)
+
         enriched = Enum.map(agents, &enrich_from_db/1)
         AgentState.seed_from_thalamus(agents)
         {:ok, maybe_filter_by_org(enriched, org_id)}

@@ -163,6 +163,9 @@ defmodule Soma.AgentState do
 
     state = %{
       id: agent_id,
+      name: agent["name"],
+      email: agent["email"],
+      organization_id: agent["organization_id"],
       runtime: agent["runtime"] || "unknown",
       runtime_version: agent["version"],
       workspace: event["workspace"],
@@ -176,7 +179,11 @@ defmodule Soma.AgentState do
       timestamp: event["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
-    :ets.insert(@table, {agent_id, state})
+    # Usa upsert en vez de insert directo para preservar campos que los
+    # eventos no incluyen (organization_id, name, email). Sin esto, un
+    # evento del agente pisa el registro completo y organization_id se
+    # pierde → el filtro por org descarta al agente del dashboard.
+    upsert(agent_id, state)
   end
 
   # ── Helpers ─────────────────────────────────────────────────
