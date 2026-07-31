@@ -178,7 +178,15 @@ defmodule Soma.Workspace do
   # ── Delete ────────────────────────────────────
 
   def delete(org_id, relative_path) do
-    with {:ok, full} <- resolve(org_id, relative_path),
+    # Para archivos de org, resolver desde shared/ (mismo base que list_files)
+    resolved =
+      case resolve(org_id, relative_path) do
+        {:ok, full} ->
+          if fs().exists?(full), do: {:ok, full}, else: resolve(org_id, Path.join("shared", relative_path))
+        error -> error
+      end
+
+    with {:ok, full} <- resolved,
          true <- fs().exists?(full) do
       # Soft-delete: mover a .trash/ en vez de borrado físico
       trash_dir = Path.join(org_path(org_id), ".trash")
