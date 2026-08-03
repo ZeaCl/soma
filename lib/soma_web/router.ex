@@ -8,10 +8,6 @@ defmodule SomaWeb.Router do
     send_resp(conn, 200, Jason.encode!(%{status: "ok", service: "soma"}))
   end
 
-  get "/metrics" do
-    conn
-    |> put_resp_content_type("text/plain")
-    |> send_resp(200, PromEx.get_metrics())
   end
 
   get "/agent-ws" do
