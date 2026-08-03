@@ -11,7 +11,7 @@ defmodule Soma.Application do
       Soma.Repo,
       {Phoenix.PubSub, name: Soma.PubSub},
       Soma.AgentState,
-      SomaWeb.Endpoint
+      SomaWeb.Endpoint,
       {Soma.PromEx, name: Soma.PromEx},
     ]
 
