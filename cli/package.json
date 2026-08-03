@@ -1,5 +1,5 @@
 {
-  "name": "@zea/soma-cli",
+  "name": "@zea.cl/soma",
   "version": "0.2.0",
   "description": "CLI for ZEA Soma AgentHub — agentes, chat, skills, sandboxes",
   "type": "module",
