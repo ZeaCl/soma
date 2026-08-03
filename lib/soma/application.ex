@@ -11,8 +11,7 @@ defmodule Soma.Application do
       Soma.Repo,
       {Phoenix.PubSub, name: Soma.PubSub},
       Soma.AgentState,
-      SomaWeb.Endpoint
-      {Soma.PromEx, name: Soma.PromEx},
+      SomaWeb.Endpoint,
     ]
 
     opts = [strategy: :one_for_one, name: Soma.Supervisor]

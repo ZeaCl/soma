@@ -27,7 +27,5 @@ config :soma, :org_workspace_root, "/home/orgs"
 
 config :logger, level: :info
 
-# PromEx — Prometheus metrics export
-config :soma, Soma.PromEx, metrics_server: [port: 4024]
 
 import_config "#{config_env()}.exs"
