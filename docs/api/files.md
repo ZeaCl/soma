@@ -13,13 +13,13 @@ GET /api/files
 | Param | Type | Default | Description |
 |---|---|---|---|
 | `agent_id` | UUID | — | Filter by agent |
-| `path` | string | `"/"` | Directory path |
+| `path` | string | `""` | Directory path |
 
 **Response**:
 
 ```json
 {
-  "data": [
+  "files": [
     {
       "name": "report.xlsx",
       "path": "/excel/report.xlsx",
@@ -40,10 +40,243 @@ GET /api/files
 
 ---
 
-## Unified file listing (user + agent + org)
+## Get file content
 
 ```
-GET /api/files/unified
+GET /api/files/content
+```
+
+**Query params**:
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | ✅ | File path in workspace |
+
+**Response**: file content as raw bytes with appropriate `Content-Type` (`.md` → `text/markdown`, `.json` → `application/json`, else `text/plain`).
+
+Errors: `404` with `{"error": "not_found"}`.
+
+---
+
+## Upload file
+
+```
+POST /api/files/upload
+```
+
+**Body**:
+
+```json
+{
+  "name": "data.xlsx",
+  "data": "<base64_encoded_content>",
+  "path": "excel/2026"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "ok": true,
+  "path": "excel/2026/data.xlsx",
+  "size": 24576
+}
+```
+
+---
+
+## Create directory
+
+```
+POST /api/files/mkdir
+```
+
+**Body**:
+
+```json
+{
+  "path": "excel/2026"
+}
+```
+
+**Response**: `200 OK` with `{"ok": true, "path": "excel/2026"}`.
+
+Errors: `409` with `{"error": "Ya existe"}` if directory already exists.
+
+---
+
+## Rename file/directory
+
+```
+PUT /api/files/rename
+```
+
+**Body**:
+
+```json
+{
+  "path": "excel/old_name.xlsx",
+  "newName": "new_name.xlsx"
+}
+```
+
+**Response**: `200 OK` with `{"ok": true, "path": "excel/new_name.xlsx"}`.
+
+Errors: `404` with `{"error": "No encontrado"}`.
+
+---
+
+## Move file/directory
+
+```
+POST /api/files/move
+```
+
+**Body**:
+
+```json
+{
+  "source": "excel/temp/report.xlsx",
+  "dest": "excel/final/report.xlsx"
+}
+```
+
+**Response**: `200 OK` with `{"ok": true, "path": "excel/final/report.xlsx"}`.
+
+Errors: `404` with `{"error": "No encontrado"}`.
+
+---
+
+## Delete file/directory
+
+```
+DELETE /api/files?path=excel/old_report.xlsx
+```
+
+**Query params**:
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | ✅ | File or directory path |
+
+**Response**: `200 OK` with `{"ok": true}`.
+
+Errors:
+- `404` with `{"error": "No encontrado"}` — file not found
+- `409` with `{"error": "Directorio no vacío"}` — directory not empty
+
+---
+
+## File version history
+
+```
+GET /api/files/history?path=excel/report.xlsx
+```
+
+**Query params**:
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `path` | string | `""` | File path |
+
+**Response**:
+
+```json
+{
+  "path": "excel/report.xlsx",
+  "commits": [
+    {
+      "hash": "a1b2c3d",
+      "message": "Updated report",
+      "date": "2026-07-12T10:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Recover file version
+
+```
+POST /api/files/recover
+```
+
+**Body**:
+
+```json
+{
+  "path": "excel/report.xlsx",
+  "commit": "a1b2c3d"
+}
+```
+
+**Response**: `200 OK` with `{"ok": true, "path": "excel/report.xlsx"}`.
+
+---
+
+## Push workspace changes
+
+```
+POST /api/files/push
+```
+
+Pushes workspace git changes to remote. **Response**: `200 OK` with `{"ok": true, "output": "..."}`.
+
+---
+
+## Trash (soft-delete)
+
+### List trash
+
+```
+GET /api/files/trash
+```
+
+**Response**:
+
+```json
+{
+  "files": [
+    {
+      "name": "deleted_report.xlsx",
+      "path": ".trash/deleted_report.xlsx",
+      "size": 245760,
+      "type": "file",
+      "modified_at": "2026-07-12T10:30:00Z"
+    }
+  ]
+}
+```
+
+### Recover from trash
+
+```
+POST /api/files/trash/recover
+```
+
+**Body**:
+
+```json
+{
+  "trash_filename": "deleted_report.xlsx",
+  "target_path": "excel/recovered_report.xlsx"
+}
+```
+
+**Response**: `200 OK` with `{"ok": true, "path": "excel/recovered_report.xlsx"}`.
+
+---
+
+## Unified file API
+
+Unified endpoints work across user, agent, and org workspaces.
+
+### List unified files
+
+```
+GET /api/files/unified?owner_type=agent&owner_id=<uuid>&path=
 ```
 
 **Query params**:
@@ -51,13 +284,14 @@ GET /api/files/unified
 | Param | Type | Required | Description |
 |---|---|---|---|
 | `owner_type` | `"user"` \| `"agent"` \| `"org"` | ✅ | Owner type |
-| `owner_id` | UUID | ✅ | Owner ID |
-| `org_id` | UUID | ❌ | Org ID (for `"org"` type only) |
+| `owner_id` | UUID | ✅ | Owner ID (agent/user/org UUID) |
 | `path` | string | ❌ | Directory path |
 
----
+Org ID is taken from the authenticated JWT, not a query parameter.
 
-## Upload file
+**Response**: same format as `GET /api/files`.
+
+### Upload unified file
 
 ```
 POST /api/files/unified/upload
@@ -75,56 +309,47 @@ POST /api/files/unified/upload
 }
 ```
 
-**Response**: `201 Created` with `{"ok": true, "path": "excel/2026/data.xlsx"}`.
+**Response**: `200 OK` with `{"ok": true, "path": "excel/2026/data.xlsx", "size": 24576, "owner_type": "user", "owner_id": "user-uuid"}`.
 
----
-
-## Get file content
+### Delete unified file
 
 ```
-GET /api/files/content
+DELETE /api/files/unified/delete?owner_type=agent&owner_id=<uuid>&path=old_file.txt
 ```
 
 **Query params**:
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | ✅ | File path in workspace |
+| `owner_type` | `"user"` \| `"agent"` \| `"org"` | ✅ | Owner type |
+| `owner_id` | UUID | ✅ | Owner ID |
+| `path` | string | ✅ | File/directory path |
 
-**Response**: file content as raw bytes with appropriate `Content-Type`.
+**Response**: `200 OK` with `{"ok": true}`.
+
+Errors:
+- `400` with `{"error": "owner_id required"}`
+- `403` with `{"error": "forbidden"}` — path traversal attempt
+- `404` with `{"error": "not_found"}`
 
 ---
 
-## Delete file
+## Sandbox upload (legacy)
 
 ```
-DELETE /api/files
+POST /api/sandboxes/upload
 ```
 
 **Body**:
 
 ```json
 {
-  "path": "excel/old_report.xlsx"
+  "owner_type": "agent",
+  "owner_id": "agent-uuid",
+  "name": "file.txt",
+  "data": "<base64_encoded_content>",
+  "path": "subdir"
 }
 ```
 
-**Response**: `200 OK` with `{"ok": true}`.
-
----
-
-## Legacy upload
-
-```
-POST /api/upload
-```
-
-Multipart form upload. Same as unified upload but uses `FormData`.
-
-```
-POST /api/upload
-Content-Type: multipart/form-data
-
-agent_id: "agent-uuid"
-file: <binary>
-```
+**Response**: `200 OK` with `{"ok": true, "path": "subdir/file.txt", "size": 1234, "owner_type": "agent", "owner_id": "agent-uuid"}`.

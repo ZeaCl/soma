@@ -136,23 +136,19 @@ You want to understand how Soma is built, its design decisions, and how to exten
 
 ### Architecture at a glance
 
-Soma runs as a single Docker container with **two processes**:
+Soma runs as a single Elixir process in one Docker container:
 
 ```
 Container: soma
-├── Pi Sidecar (Node.js :3002)
-│   └── agent-rpc.ts → WebSocket agents + HTTP endpoints
-│       ├── init → fetchAgentSkills(Thalamus) → prepareAgent → RpcBridge
-│       ├── prompt → stdin JSONL → pi --mode rpc → stdout → WebSocket events
-│       └── cancel → abort subprocess
-│
-├── Elixir API (Phoenix :4084)
-│   └── Plug.Router → REST API
-│       ├── /api/conversations → CRUD + messages (PostgreSQL)
-│       ├── /api/files → workspace files (disk + sandbox)
-│       ├── /api/skills → skills CRUD
-│       ├── /api/agents → agent management
-│       └── /api/sandboxes → sandbox lifecycle
+├── Elixir API (Plug.Router :4084)
+│   ├── REST API
+│   │   ├── /api/conversations → CRUD + messages (PostgreSQL)
+│   │   ├── /api/files → workspace files (disk + sandbox)
+│   │   ├── /api/skills → skills CRUD
+│   │   ├── /api/agents → agent management
+│   │   └── /api/sandboxes → sandbox lifecycle
+│   ├── WebSocket /agent-ws → AgentSocket
+│   └── AgentRunner → pi --mode rpc (subprocess per agent)
 │
 └── Sandbox Layer (Linux users)
     └── /home/soma-{shortId}/ (agents) + /home/user-{shortId}/ (humans)
@@ -162,7 +158,7 @@ Container: soma
 
 - **Linux users for isolation**: kernel-enforced, no Docker-in-Docker
 - **`sudo -u` over `spawn({uid, gid})`**: more portable
-- **Dual-write PostgreSQL**: Pi Sidecar writes messages directly, Elixir API manages CRUD
+- **Agents as subprocesses**: `pi --mode rpc` spawned per session, stdin/stdout JSONL
 - **Skills as markdown files**: copied to agent home, read by `pi --mode rpc`
 - **SDK with zero UI dependencies**: inline styles + CSS variables, no conflicts
 

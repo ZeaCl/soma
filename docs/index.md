@@ -59,13 +59,12 @@ Soma Container (Alpine Linux)
 ├── Elixir API (:4084)          REST + WebSocket + metrics
 │   ├── Plug.Router             Conversations, files, skills, agents
 │   ├── AgentSocket             WebSocket chat handler
-│   ├── AgentRunner             pi --mode rpc subprocess manager
-│   └── PromEx                  /metrics endpoint
+│   └── AgentRunner             pi --mode rpc subprocess manager
 │
 ├── Sandbox Layer (OS)
 │   └── /home/{soma,user}-{id}/ Linux users with chmod 700
 │       ├── workspace/          Agent/user files
-│       ├── .agents/skills/     Agent skills (isolated)
+│       ├── skills/             Agent skills (isolated)
 │       └── .pi-sessions/       pi CLI sessions
 │
 └── Sidecar
@@ -81,9 +80,6 @@ Soma Container (Alpine Linux)
 | Guide | Description |
 |---|---|
 | [Overview](monitoring/overview.md) | Prometheus + Grafana + Loki + Tempo |
-| [Metrics Reference](monitoring/metrics.md) | All Soma metrics (agents, BEAM, Ecto) |
-| [Alerts](monitoring/alerts.md) | Alert rules and runbooks |
-| [Dashboards](monitoring/dashboards.md) | AI Services, Services Health |
 
 ---
 
@@ -93,9 +89,6 @@ Soma Container (Alpine Linux)
 |---|---|
 | [Deploy with Docker](deployment/overview.md) | Docker + docker-compose |
 | [Configure Agents](agents/configuration.md) | Agent settings, engines, models |
-| [Create Custom Skills](guides/custom-skills.md) | Write and deploy agent skills |
-| [Setup CI/CD](guides/ci-cd.md) | GitHub Actions pipeline |
-| [Troubleshooting](guides/troubleshooting.md) | Common issues and solutions |
 
 ---
 
