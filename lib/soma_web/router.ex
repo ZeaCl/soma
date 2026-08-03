@@ -11,7 +11,7 @@ defmodule SomaWeb.Router do
   get "/metrics" do
     conn
     |> put_resp_content_type("text/plain")
-    |> send_resp(200, PromEx.export())
+    |> send_resp(200, PromEx.get_metrics())
   end
 
   get "/agent-ws" do

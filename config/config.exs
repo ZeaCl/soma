@@ -35,7 +35,7 @@ config :soma, SomaWeb.Endpoint,
       PromEx.Plugins.BEAM,
       Soma.AgentMetrics
     ],
-    metrics_server: [port: 4021]
+    metrics_server: [port: 4024]
   ]
 
 import_config "#{config_env()}.exs"
