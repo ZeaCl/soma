@@ -12,6 +12,7 @@ defmodule Soma.Application do
       {Phoenix.PubSub, name: Soma.PubSub},
       Soma.AgentState,
       SomaWeb.Endpoint
+      {Soma.PromEx, name: Soma.PromEx},
     ]
 
     opts = [strategy: :one_for_one, name: Soma.Supervisor]
