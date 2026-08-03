@@ -8,11 +8,7 @@
 GET /api/agents
 ```
 
-**Query params**:
-
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `organization_id` | UUID | — | Filter by org |
+Returns agents for the authenticated org (from JWT).
 
 **Response**:
 
@@ -41,7 +37,9 @@ GET /api/agents
 GET /api/agents/:id
 ```
 
-**Response**: agent object with config.
+**Response**: agent object with full config from Thalamus.
+
+Error: `404` with `{"error": "not_found"}`.
 
 ---
 
@@ -58,20 +56,25 @@ POST /api/agents
   "name": "Code Reviewer",
   "type": "autonomous",
   "provider": "deepseek",
-  "model": "deepseek-chat",
-  "organization_id": "org-uuid"
+  "model": "deepseek-chat"
 }
 ```
 
-**Response**: `201 Created` with agent object.
+Org ID is taken from the authenticated JWT.
+
+**Response**: `201 Created` with agent object. Also triggers async sandbox creation (Linux user + home + skills copy).
+
+Error: `422` with `{"error": "..."}`.
 
 ---
 
-## Update agent
+## Update agent config
 
 ```
-PUT /api/agents/:id
+PUT /api/agents/:id/config
 ```
+
+Updates the agent's configuration in Thalamus (name, provider, model, skills, system prompt, etc.).
 
 **Body** (partial):
 
@@ -82,7 +85,14 @@ PUT /api/agents/:id
 }
 ```
 
-**Response**: `200 OK` with updated agent.
+**Response**: `200 OK`
+
+```json
+{
+  "ok": true,
+  "config": { ... }
+}
+```
 
 ---
 
@@ -93,6 +103,33 @@ DELETE /api/agents/:id
 ```
 
 **Response**: `200 OK` with `{"ok": true}`.
+
+Error: `404` with `{"error": "not_found"}`.
+
+---
+
+## Get agent skills
+
+```
+GET /api/agents/:id/skills
+```
+
+Returns the resolved skill content for all skills assigned to the agent.
+
+**Response**:
+
+```json
+{
+  "data": [
+    {
+      "name": "fund-management",
+      "content": "# Fund Management Skill\n\n..."
+    }
+  ]
+}
+```
+
+Error: `404` with `{"error": "not_found"}` (agent not found).
 
 ---
 
@@ -106,39 +143,27 @@ POST /api/agents/:id/share
 
 ```json
 {
-  "shared_with": "user-uuid"
+  "shared_with_user_id": "user-uuid"
 }
 ```
 
-**Response**: `201 Created` with `{"ok": true}`.
+**Response**: `200 OK` with `{"ok": true}`.
+
+Error: `422` with `{"error": "validation_failed", "details": {...}}`.
 
 ---
 
 ## Revoke share
 
 ```
-DELETE /api/agents/:id/share
+DELETE /api/agents/:id/share/:user_id
 ```
 
-**Body**:
-
-```json
-{
-  "shared_with": "user-uuid"
-}
-```
+`:user_id` is the UUID of the user to unshare with.
 
 **Response**: `200 OK` with `{"ok": true}`.
 
----
-
-## List shared agents
-
-```
-GET /api/agents/shared
-```
-
-Returns agents shared with the authenticated user.
+Error: `404` with `{"error": "not_found"}`.
 
 ---
 
@@ -149,3 +174,53 @@ GET /api/agents/:id/shares
 ```
 
 Returns all shares for a specific agent.
+
+**Response**:
+
+```json
+{
+  "data": [
+    {
+      "agent_id": "agent-uuid",
+      "shared_with_user_id": "user-uuid",
+      "shared_by_user_id": "admin-uuid"
+    }
+  ]
+}
+```
+
+---
+
+## List agents shared with me
+
+```
+GET /api/agents/shared
+```
+
+Returns agents shared with the authenticated user.
+
+**Response**: same format as `GET /api/agents`.
+
+---
+
+## List all agent shares
+
+```
+GET /api/agent-shares
+```
+
+Returns all shares in the org.
+
+**Response**:
+
+```json
+{
+  "data": [
+    {
+      "agent_id": "agent-uuid",
+      "shared_with_user_id": "user-uuid",
+      "shared_by_user_id": "admin-uuid"
+    }
+  ]
+}
+```

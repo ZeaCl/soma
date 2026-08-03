@@ -6,32 +6,27 @@
 
 ---
 
-## 🏗️ Arquitectura real (2 procesos)
+## 🏗️ Arquitectura
 
-Soma tiene **2 procesos** que corren en el mismo contenedor Docker:
+Soma corre como un único proceso Elixir en un contenedor Docker:
 
 ```
 ┌──────────────────────────────────────────────┐
 │  CONTENEDOR Soma (Alpine Linux)              │
 │                                              │
 │  ┌──────────────────────────────────────┐    │
-│  │  PID 1: start.sh                     │    │
-│  │  ├─ Pi Sidecar (:3002)              │    │
-│  │  │   agent-rpc.ts                   │    │
-│  │  │   ├─ HTTP API (conversaciones,   │    │
-│  │  │   │   skills, archivos)          │    │
-│  │  │   └─ WebSocket (chat agentes)    │    │
-│  │  │       ├─ init → prepara sandbox  │    │
-│  │  │       ├─ prompt → bridge RPC     │    │
-│  │  │       └─ cancel → abort          │    │
-│  │  │                                  │    │
-│  │  └─ Elixir API (:4084)              │    │
-│  │      Phoenix (Plug.Router)          │    │
-│  │      ├─ Conversaciones (DB)         │    │
-│  │      ├─ Workspace Files             │    │
-│  │      ├─ Skills CRUD                 │    │
-│  │      ├─ API Keys                    │    │
-│  │      └─ Agent Management            │    │
+│  │  Elixir API (:4084)                  │    │
+│  │  Plug.Router                         │    │
+│  │  ├─ REST API                         │    │
+│  │  │   ├─ Conversaciones (DB)          │    │
+│  │  │   ├─ Workspace Files              │    │
+│  │  │   ├─ Skills CRUD                  │    │
+│  │  │   ├─ API Keys                     │    │
+│  │  │   └─ Agent Management             │    │
+│  │  ├─ WebSocket /agent-ws             │    │
+│  │  │   └─ AgentSocket                  │    │
+│  │  └─ AgentRunner                      │    │
+│  │      └─ pi --mode rpc (subprocess)   │    │
 │  └──────────────────────────────────────┘    │
 │                                              │
 │  ┌──────────────────────────────────────┐    │
@@ -39,7 +34,7 @@ Soma tiene **2 procesos** que corren en el mismo contenedor Docker:
 │  │                                      │    │
 │  │  /home/soma-{shortId}/              │    │
 │  │    ├── workspace/    (archivos)      │    │
-│  │    ├── .agents/skills/ (solo suyas) │    │
+│  │    ├── skills/       (solo suyas)    │    │
 │  │    ├── .pi-sessions/ (sesiones pi)  │    │
 │  │    └── .pi/agent/    (auth, config) │    │
 │  │                                      │    │
@@ -53,14 +48,12 @@ Soma tiene **2 procesos** que corren en el mismo contenedor Docker:
 
 ```
 1. Cliente WebSocket → { type:"init", uid, cid }
-2. agent-rpc.ts → fetchAgentSkills(userId) → Thalamus
-3. agent-rpc.ts → prepareAgent(agentId, skills)
-4. agent-sandbox.ts → soma-agent-useradd → usuario Linux
-5. agent-sandbox.ts → copia skills a /home/soma-{id}/.agents/skills/
-6. agent-rpc.ts → new RpcBridge({ username, home })
-7. RpcBridge → sudo -u soma-{id} pi --mode rpc --session-dir /home/...
-8. pi CLI → lee skills de ~/.agents/skills/
-9. stdin/stdout JSONL ↔ eventos tipados ↔ WebSocket
+2. AgentSocket → AgentRunner.start(agent_id, session_dir)
+3. AgentRunner → Sandbox.create → soma-agent-useradd → usuario Linux
+4. AgentRunner → copia skills a /home/soma-{id}/skills/
+5. AgentRunner → spawn pi --mode rpc --session-dir /home/...
+6. pi CLI → lee skills de ~/skills/
+7. stdin/stdout JSONL ↔ eventos tipados ↔ WebSocket
 ```
 
 ---
@@ -83,25 +76,33 @@ Cada agente es un **usuario Linux real** (`soma-{first12chars}`) con:
 
 ```
 soma/
-├── lib/                    # Backend Elixir (Phoenix Plug.Router)
+├── lib/                    # Backend Elixir (Plug.Router)
 │   ├── soma/               #   Lógica de negocio
 │   │   ├── application.ex
+│   │   ├── agent_runner.ex     #   pi --mode rpc subprocess manager
+│   │   ├── agent_events.ex     #   Eventos de agente tipados
 │   │   ├── conversations.ex
 │   │   ├── workspace.ex
 │   │   ├── sandbox.ex
+│   │   ├── user_sandbox.ex
+│   │   ├── org_workspace.ex
 │   │   ├── skills.ex
 │   │   ├── api_key.ex
-│   │   └── agent_share.ex
+│   │   ├── agent_shares.ex
+│   │   ├── agent_dashboard.ex
+│   │   ├── secret_provider.ex
+│   │   └── thalamus_client.ex
 │   └── soma_web/           #   Web layer
 │       ├── router.ex
 │       ├── endpoint.ex
-│       ├── controllers/api_controller.ex
+│       ├── agent_socket.ex     #   WebSocket chat handler
+│       ├── controllers/
+│       │   ├── agent_controller.ex
+│       │   ├── conversation_controller.ex
+│       │   ├── file_controller.ex
+│       │   ├── sandbox_controller.ex
+│       │   └── skill_controller.ex
 │       └── plugs/          #   Auth (JWT, API Key)
-│
-├── server/                 # Pi Sidecar (Node.js + TypeScript)
-│   ├── agent-rpc.ts        #   WebSocket + HTTP server (:3002)
-│   ├── agent-sandbox.ts    #   Sandbox lifecycle (create/destroy)
-│   └── rpc-bridge.ts       #   Bridge stdin/stdout ↔ pi --mode rpc
 │
 ├── sdk/                    # @zea/soma-sdk (React)
 │   └── src/
@@ -114,7 +115,7 @@ soma/
 ├── ui/                     # Landing page
 ├── skill/                  # Skills para AI agents
 ├── Dockerfile              # Multi-stage build
-└── start.sh                # Entrypoint (lanza ambos procesos)
+└── start.sh                # Entrypoint
 ```
 
 ---
