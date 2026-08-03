@@ -7,7 +7,7 @@ defmodule Soma.PromEx do
     [
       PromEx.Plugins.Ecto,
       PromEx.Plugins.Application,
-      PromEx.Plugins.BEAM,
+      PromEx.Plugins.Beam,
       Soma.AgentMetrics
     ]
   end
