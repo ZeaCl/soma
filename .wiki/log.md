@@ -4,6 +4,16 @@ Bitácora cronológica de cambios. Formato: `## [YYYY-MM-DD] <tipo> | <descripci
 
 ---
 
+## [2026-08-03] fix | zea-soma files list sin flags devuelve silencio — owner_id required para org
+
+- **Issue**: #175 (zea-soma files list no encuentra archivos)
+- **Causa 1**: SandboxController.get "/" exigía owner_id incluso para owner_type=org, pero workspace_base("org", ...) ignora owner_id. Al correr `files list` sin flags, se enviaba owner_type=org + owner_id="" → 400.
+- **Causa 2**: CLI no manejaba respuestas no-200 — el error se tragaba en silencio.
+- **Causa 3**: No existía ruta /list explícita (el usuario probó con curl /api/files/unified/list).
+- **Fix API**: Validar owner_id solo cuando owner_type != "org". Agregar GET /list como alias.
+- **Fix CLI**: Mostrar error en respuestas no-200, con hint cuando falte owner_id.
+- **Archivos**: sandbox_controller.ex, commands/files.js, commands/sandbox.js, locales/{es,en}.js, sandbox_contract_test.exs (nuevo)
+
 ## [2026-07-25] fix | Archivos roto en Südlich — rutas /api/files/unified y /api/sandboxes
 
 - **Issue**: #124 (API /api/sandboxes y /api/files/unified retornan not_found)

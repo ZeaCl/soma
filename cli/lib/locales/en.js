@@ -126,6 +126,7 @@ export default {
     history: '📜 History',
     recovered: '✅ Recovered',
     push_ok: '✅ Push successful',
+    hint_owner: 'Use --agent <id> or --user <id> to filter by owner',
   },
 
   // ── API Key ──

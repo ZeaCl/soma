@@ -28,6 +28,13 @@ export function register(program) {
           for (const f of body.files) {
             console.log(`   ${f.type === 'dir' ? '📁' : '📄'} ${f.name.padEnd(40)} ${formatSize(f.size)}`);
           }
+        } else {
+          const errMsg = body?.error || `HTTP ${status}`;
+          console.error(chalk.red(`${t.errors.http_error.replace('{code}', status)}: ${errMsg}`));
+          if (status === 400 && body?.error === 'owner_id required') {
+            console.error(chalk.yellow(`  ${t.files.hint_owner}`));
+          }
+          process.exit(1);
         }
       } catch (err) { console.error(chalk.red(err.message)); process.exit(1); }
     });
