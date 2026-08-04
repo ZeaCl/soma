@@ -9,23 +9,7 @@ defmodule SomaWeb.SandboxController do
   plug(:dispatch)
 
   get "/" do
-    org_id = conn.assigns[:org_id]
-    owner_type = conn.params["owner_type"] || "agent"
-    owner_id = conn.params["owner_id"] || ""
-
-    # owner_id solo es obligatorio para user y agent (org usa shared dir)
-    if owner_type != "org" && (owner_id == nil || owner_id == "") do
-      json(conn, 400, %{error: "owner_id required"})
-    else
-      case Workspace.list_files(owner_type, owner_id, org_id, conn.params["path"] || "") do
-        {:ok, files} ->
-          json(conn, 200, %{
-            files: format_file_list(files),
-            owner_type: owner_type,
-            owner_id: owner_id
-          })
-      end
-    end
+    list_files(conn)
   end
 
   get "/create" do
@@ -97,7 +81,7 @@ defmodule SomaWeb.SandboxController do
     owner_type = conn.params["owner_type"] || "agent"
     owner_id = conn.params["owner_id"] || ""
 
-    if owner_type != "org" && (owner_id == nil || owner_id == "") do
+    if owner_type != "org" && owner_id == "" do
       json(conn, 400, %{error: "owner_id required"})
     else
       case Workspace.delete_workspace_file(owner_type, owner_id, org_id, path) do
@@ -111,11 +95,18 @@ defmodule SomaWeb.SandboxController do
 
   # GET /list — alias explícito para listar archivos unificados
   get "/list" do
+    list_files(conn)
+  end
+
+  match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
+
+  defp list_files(conn) do
     org_id = conn.assigns[:org_id]
     owner_type = conn.params["owner_type"] || "agent"
     owner_id = conn.params["owner_id"] || ""
 
-    if owner_type != "org" && (owner_id == nil || owner_id == "") do
+    # owner_id solo es obligatorio para user y agent (org usa shared dir)
+    if owner_type != "org" && owner_id == "" do
       json(conn, 400, %{error: "owner_id required"})
     else
       case Workspace.list_files(owner_type, owner_id, org_id, conn.params["path"] || "") do
@@ -128,8 +119,6 @@ defmodule SomaWeb.SandboxController do
       end
     end
   end
-
-  match(_, do: Plug.Conn.send_resp(conn, 404, Jason.encode!(%{error: "not_found"})))
 
   defp do_create_sandbox(conn, attrs) do
     require Logger
