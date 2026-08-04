@@ -60,20 +60,33 @@ defmodule Soma.AgentDashboard do
                   if File.dir?(src) do
                     File.mkdir_p!(dst)
                     File.cp_r!(src, dst)
+
+                    # Symlink a ~/.pi/agent/skills/ (donde pi busca skills)
+                    pi_skills_dir = Path.join([home, ".pi", "agent", "skills"])
+                    pi_skill_link = Path.join(pi_skills_dir, name)
+                    File.mkdir_p!(pi_skills_dir)
+
+                    if not File.exists?(pi_skill_link) do
+                      File.ln_s(dst, pi_skill_link)
+                    end
                   end
                 end
 
                 # Crear .pi/agent/config.json para el runtime
                 cfg_dir = Path.join([home, ".pi", "agent"])
                 File.mkdir_p!(cfg_dir)
+
                 File.write!(
                   Path.join(cfg_dir, "config.json"),
-                  Jason.encode!(%{
-                    "skills" => skill_names,
-                    "system_prompt" => config["system_prompt"],
-                    "engine" => config["engine"] || "pi",
-                    "created_at" => DateTime.to_iso8601(DateTime.utc_now())
-                  }, pretty: true)
+                  Jason.encode!(
+                    %{
+                      "skills" => skill_names,
+                      "system_prompt" => config["system_prompt"],
+                      "engine" => config["engine"] || "pi",
+                      "created_at" => DateTime.to_iso8601(DateTime.utc_now())
+                    },
+                    pretty: true
+                  )
                 )
 
               {:error, _} ->

@@ -173,6 +173,15 @@ defmodule Soma.Skills do
       File.cp_r!(src, dst)
     end
 
+    # Symlink a ~/.pi/agent/skills/ (donde pi busca skills)
+    pi_skills_dir = Path.join([home, ".pi", "agent", "skills"])
+    pi_skill_link = Path.join(pi_skills_dir, skill_name)
+    File.mkdir_p!(pi_skills_dir)
+
+    if not File.exists?(pi_skill_link) do
+      File.ln_s(dst, pi_skill_link)
+    end
+
     # Actualizar config.json
     config_path = Path.join([home, ".pi", "agent", "config.json"])
 
