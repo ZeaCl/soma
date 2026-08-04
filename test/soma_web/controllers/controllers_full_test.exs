@@ -395,9 +395,22 @@ defmodule SomaWeb.ControllersFullTest do
     assert conn.status == 404
   end
 
-  test "sandbox unified delete returns 400 for missing owner_id" do
+  test "sandbox unified delete org sin owner_id ya no requiere owner_id (issue #175)" do
+    Workspace.ensure_org(@org_id)
+    shared = Path.join(Workspace.org_path(@org_id), "shared")
+    File.mkdir_p!(shared)
+    File.write!(Path.join(shared, "to_delete.txt"), "bye")
+
     conn =
-      authed(:delete, "/delete?owner_type=org&path=test.txt")
+      authed(:delete, "/delete?owner_type=org&path=to_delete.txt")
+      |> SandboxController.call(SandboxController.init([]))
+
+    assert conn.status == 200
+  end
+
+  test "sandbox unified delete agent sin owner_id sigue exigiendo owner_id" do
+    conn =
+      authed(:delete, "/delete?owner_type=agent&path=test.txt")
       |> SandboxController.call(SandboxController.init([]))
 
     assert conn.status == 400

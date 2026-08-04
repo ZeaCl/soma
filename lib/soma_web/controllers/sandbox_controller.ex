@@ -11,9 +11,10 @@ defmodule SomaWeb.SandboxController do
   get "/" do
     org_id = conn.assigns[:org_id]
     owner_type = conn.params["owner_type"] || "agent"
-    owner_id = conn.params["owner_id"]
+    owner_id = conn.params["owner_id"] || ""
 
-    if owner_id == nil || owner_id == "" do
+    # owner_id solo es obligatorio para user y agent (org usa shared dir)
+    if owner_type != "org" && (owner_id == nil || owner_id == "") do
       json(conn, 400, %{error: "owner_id required"})
     else
       case Workspace.list_files(owner_type, owner_id, org_id, conn.params["path"] || "") do
@@ -94,9 +95,9 @@ defmodule SomaWeb.SandboxController do
     org_id = conn.assigns[:org_id]
     path = conn.params["path"] || ""
     owner_type = conn.params["owner_type"] || "agent"
-    owner_id = conn.params["owner_id"]
+    owner_id = conn.params["owner_id"] || ""
 
-    if owner_id == nil || owner_id == "" do
+    if owner_type != "org" && (owner_id == nil || owner_id == "") do
       json(conn, 400, %{error: "owner_id required"})
     else
       case Workspace.delete_workspace_file(owner_type, owner_id, org_id, path) do
@@ -104,6 +105,26 @@ defmodule SomaWeb.SandboxController do
         {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
         {:error, :path_traversal} -> json(conn, 403, %{error: "forbidden"})
         _ -> json(conn, 500, %{error: "Unexpected error"})
+      end
+    end
+  end
+
+  # GET /list — alias explícito para listar archivos unificados
+  get "/list" do
+    org_id = conn.assigns[:org_id]
+    owner_type = conn.params["owner_type"] || "agent"
+    owner_id = conn.params["owner_id"] || ""
+
+    if owner_type != "org" && (owner_id == nil || owner_id == "") do
+      json(conn, 400, %{error: "owner_id required"})
+    else
+      case Workspace.list_files(owner_type, owner_id, org_id, conn.params["path"] || "") do
+        {:ok, files} ->
+          json(conn, 200, %{
+            files: format_file_list(files),
+            owner_type: owner_type,
+            owner_id: owner_id
+          })
       end
     end
   end
