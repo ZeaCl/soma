@@ -154,16 +154,26 @@ defmodule Soma.Skills do
         thalamus_client().update_user(agent_id, %{skills: [name]}, nil)
       end)
 
-      # Actualizar config.json local para que pi cargue la skill sin reiniciar Soma
-      update_agent_config_json(agent_id, name)
+      # Copiar skill al sandbox + actualizar config.json local
+      install_skill_to_agent(agent_id, name)
     end
 
     save_agent_registry(name, agent_ids)
     {:ok, %{name: name, assigned_to: agent_ids}}
   end
 
-  defp update_agent_config_json(agent_id, skill_name) do
+  defp install_skill_to_agent(agent_id, skill_name) do
     home = Soma.Sandbox.home_dir(agent_id)
+    src = Path.join(["/root/.agents/skills", skill_name])
+    dst = Path.join([home, "skills", skill_name])
+
+    # Copiar archivos del skill si existe en el source y no en el destino
+    if File.dir?(src) and not File.dir?(dst) do
+      File.mkdir_p!(dst)
+      File.cp_r!(src, dst)
+    end
+
+    # Actualizar config.json
     config_path = Path.join([home, ".pi", "agent", "config.json"])
 
     if File.exists?(config_path) do
