@@ -8,12 +8,13 @@ RUN mix deps.get --only prod
 
 FROM deps AS build
 ENV MIX_ENV=prod
+ARG BUILD_TIME=unknown
 COPY config ./config
 COPY lib ./lib
 COPY priv ./priv
 RUN mix deps.compile
-RUN mix compile
-RUN mix release
+RUN mix compile --force
+RUN mix release --overwrite
 
 FROM alpine:3.21.3 AS runtime
 RUN apk add --no-cache ncurses-libs openssl libstdc++ bash nodejs npm git docker-cli docker-cli-compose shadow sudo python3 py3-pip curl
