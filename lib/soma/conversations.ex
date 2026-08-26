@@ -19,7 +19,20 @@ defmodule Soma.Conversations do
 
   def get(org_id, id) do
     org_id = normalize_org_id(org_id)
-    Repo.get_by(Conversation, organization_id: org_id, id: id, is_deleted: false)
+
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        case Repo.get_by(Conversation, organization_id: org_id, id: uuid, is_deleted: false) do
+          nil ->
+            Repo.get_by(Conversation, organization_id: org_id, app_context: id, is_deleted: false)
+
+          conv ->
+            conv
+        end
+
+      :error ->
+        Repo.get_by(Conversation, organization_id: org_id, app_context: id, is_deleted: false)
+    end
   end
 
   def get_or_create(org_id, user_id, agent_id, app_context) do
@@ -55,7 +68,7 @@ defmodule Soma.Conversations do
   def soft_delete(org_id, id) do
     org_id = normalize_org_id(org_id)
 
-    case Repo.get_by(Conversation, organization_id: org_id, id: id) do
+    case get(org_id, id) do
       nil ->
         {:error, :not_found}
 
@@ -67,42 +80,68 @@ defmodule Soma.Conversations do
   end
 
   def list_messages(conv_id, limit \\ 100) do
-    Repo.all(
-      from(m in Message,
-        where: m.conversation_id == ^conv_id,
-        order_by: [asc: m.created_at],
-        limit: ^limit
-      )
-    )
+    case Ecto.UUID.cast(conv_id) do
+      {:ok, uuid} ->
+        Repo.all(
+          from(m in Message,
+            where: m.conversation_id == ^uuid,
+            order_by: [asc: m.created_at],
+            limit: ^limit
+          )
+        )
+
+      :error ->
+        []
+    end
   end
 
   def add_message(conv_id, attrs) do
-    result =
-      %Message{}
-      |> Message.changeset(Map.put(attrs, :conversation_id, conv_id))
-      |> Repo.insert()
+    case Ecto.UUID.cast(conv_id) do
+      {:ok, uuid} ->
+        params =
+          case attrs do
+            map when is_map(map) ->
+              if Enum.any?(Map.keys(map), &is_binary/1) do
+                Map.put(map, "conversation_id", uuid)
+              else
+                Map.put(map, :conversation_id, uuid)
+              end
 
-    case result do
-      {:ok, _msg} ->
-        # Bump conversation metadata (ignore if conv was deleted)
-        Repo.update_all(
-          from(c in Conversation, where: c.id == ^conv_id),
-          inc: [message_count: 1],
-          set: [last_message_at: DateTime.utc_now()]
-        )
+            _ ->
+              attrs
+          end
 
-        # Auto-update title from first user message
-        if attrs[:role] == "user" do
-          maybe_update_title(conv_id, attrs[:content])
+        result =
+          %Message{}
+          |> Message.changeset(params)
+          |> Repo.insert()
+
+        case result do
+          {:ok, _msg} ->
+            Repo.update_all(
+              from(c in Conversation, where: c.id == ^uuid),
+              inc: [message_count: 1],
+              set: [last_message_at: DateTime.utc_now()]
+            )
+
+            role = attrs[:role] || attrs["role"]
+            content = attrs[:content] || attrs["content"]
+
+            if role == "user" do
+              maybe_update_title(uuid, content)
+            end
+
+            :ok
+
+          _ ->
+            :ok
         end
 
-        :ok
+        result
 
-      _ ->
-        :ok
+      :error ->
+        {:error, :invalid_conversation_id}
     end
-
-    result
   end
 
   defp maybe_update_title(conv_id, content) when is_binary(content) do

@@ -25,15 +25,27 @@ defmodule SomaWeb.ConversationController do
         json(conn, 404, %{error: "not_found"})
 
       conv ->
-        messages = Conversations.list_messages(id)
-        json(conn, 200, ConversationView.render("show.json", %{conversation: conv, messages: messages}))
+        messages = Conversations.list_messages(conv.id)
+
+        json(
+          conn,
+          200,
+          ConversationView.render("show.json", %{conversation: conv, messages: messages})
+        )
     end
   end
 
   post "/:id/messages" do
+    org_id = conn.assigns[:org_id]
     attrs = conn.body_params
 
-    case Conversations.add_message(id, attrs) do
+    conv_id =
+      case Conversations.get(org_id, id) do
+        %Soma.Conversation{id: conv_uuid} -> conv_uuid
+        nil -> id
+      end
+
+    case Conversations.add_message(conv_id, attrs) do
       {:ok, msg} ->
         json(conn, 201, %{data: MessageView.message_json(msg)})
 
