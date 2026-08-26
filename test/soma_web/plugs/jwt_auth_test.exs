@@ -55,4 +55,19 @@ defmodule SomaWeb.Plugs.JWTAuthTest do
   test "verify_token with invalid token returns error" do
     assert {:error, _reason} = JWTAuth.verify_token("invalid.token.format")
   end
+
+  test "normalize_user_id strips user_ prefix" do
+    assert JWTAuth.normalize_user_id("user_123") == "123"
+    assert JWTAuth.normalize_user_id("123") == "123"
+  end
+
+  test "normalize_org_id strips org_ prefix" do
+    assert JWTAuth.normalize_org_id("org_ea7b11ea-852c-44e5-aee1-a761ec76eaea") ==
+             "ea7b11ea-852c-44e5-aee1-a761ec76eaea"
+
+    assert JWTAuth.normalize_org_id("ea7b11ea-852c-44e5-aee1-a761ec76eaea") ==
+             "ea7b11ea-852c-44e5-aee1-a761ec76eaea"
+
+    assert JWTAuth.normalize_org_id(nil) == nil
+  end
 end
