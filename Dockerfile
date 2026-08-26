@@ -8,7 +8,8 @@ RUN mix deps.get --only prod
 
 FROM deps AS build
 ENV MIX_ENV=prod
-ARG BUILD_TIME=unknown
+# Cache bust tag: 2026-08-26-force-recompile-v3
+RUN echo "building soma release"
 COPY config ./config
 COPY lib ./lib
 COPY priv ./priv
