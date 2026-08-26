@@ -91,30 +91,37 @@ defmodule SomaWeb.Plugs.JWTAuth do
   def normalize_user_id("user_" <> id), do: id
   def normalize_user_id(id), do: id
 
+  @doc "Normaliza org_id quitando prefijo org_ para consistencia con UUID."
+  def normalize_org_id("org_" <> id), do: id
+  def normalize_org_id(id), do: id
+
   defp get_org_id(conn, claims, token) do
     # 1. Header explícito
-    case get_req_header(conn, "x-zea-org-id") do
-      [org_id | _] when org_id != "" ->
-        org_id
+    raw_org_id =
+      case get_req_header(conn, "x-zea-org-id") do
+        [org_id | _] when org_id != "" ->
+          org_id
 
-      _ ->
-        # 2. JWT claim directo
-        case claims["organization_id"] do
-          org_id when is_binary(org_id) and org_id != "" ->
-            org_id
+        _ ->
+          # 2. JWT claim directo
+          case claims["organization_id"] do
+            org_id when is_binary(org_id) and org_id != "" ->
+              org_id
 
-          _ ->
-            # 3. Domain roles claim
-            case List.first(claims["domain_roles"] || []) do
-              %{"org_id" => org_id} ->
-                org_id
+            _ ->
+              # 3. Domain roles claim
+              case List.first(claims["domain_roles"] || []) do
+                %{"org_id" => org_id} ->
+                  org_id
 
-              _ ->
-                # 4. Fetch from Thalamus /oauth/userinfo
-                fetch_org_from_thalamus(token)
-            end
-        end
-    end
+                _ ->
+                  # 4. Fetch from Thalamus /oauth/userinfo
+                  fetch_org_from_thalamus(token)
+              end
+          end
+      end
+
+    normalize_org_id(raw_org_id)
   end
 
   defp fetch_org_from_thalamus(token) do
