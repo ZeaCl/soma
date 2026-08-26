@@ -6,6 +6,9 @@ defmodule Soma.Conversations do
   alias Soma.Repo
 
   def list(org_id, user_id) do
+    org_id = normalize_org_id(org_id)
+    user_id = normalize_user_id(user_id)
+
     Repo.all(
       from(c in Conversation,
         where: c.organization_id == ^org_id and c.user_id == ^user_id and c.is_deleted == false,
@@ -15,10 +18,14 @@ defmodule Soma.Conversations do
   end
 
   def get(org_id, id) do
+    org_id = normalize_org_id(org_id)
     Repo.get_by(Conversation, organization_id: org_id, id: id, is_deleted: false)
   end
 
   def get_or_create(org_id, user_id, agent_id, app_context) do
+    org_id = normalize_org_id(org_id)
+    user_id = normalize_user_id(user_id)
+
     case Repo.get_by(Conversation,
            organization_id: org_id,
            user_id: user_id,
@@ -46,6 +53,8 @@ defmodule Soma.Conversations do
   end
 
   def soft_delete(org_id, id) do
+    org_id = normalize_org_id(org_id)
+
     case Repo.get_by(Conversation, organization_id: org_id, id: id) do
       nil ->
         {:error, :not_found}
@@ -110,4 +119,10 @@ defmodule Soma.Conversations do
   end
 
   defp maybe_update_title(_conv_id, _content), do: :ok
+
+  defp normalize_user_id("user_" <> id), do: id
+  defp normalize_user_id(id), do: id
+
+  defp normalize_org_id("org_" <> id), do: id
+  defp normalize_org_id(id), do: id
 end
