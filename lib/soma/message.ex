@@ -9,7 +9,7 @@ defmodule Soma.Message do
     field(:role, :string)
     field(:content, :string)
     field(:thinking, :string)
-    field(:tools, :map)
+    field(:tools, {:array, :map})
     field(:created_at, :utc_datetime)
   end
 
