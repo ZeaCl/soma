@@ -40,6 +40,7 @@ defmodule Soma.AgentRunner do
     token = Keyword.fetch!(opts, :token)
     org_id = Keyword.fetch!(opts, :org_id)
     user_id = Keyword.fetch!(opts, :user_id)
+    conversation_id = Keyword.get(opts, :conversation_id)
     workspace = Keyword.get(opts, :workspace, "")
     issue = Keyword.get(opts, :issue)
 
@@ -85,6 +86,15 @@ defmodule Soma.AgentRunner do
         # Read local config if exists
         config_path = Path.join([home, ".pi", "agent", "config.json"])
         pi_args = ["--mode", "rpc", "--session-dir", "#{home}/.pi-sessions"]
+
+        # Sesión durable por conversación (#192): el conversation.id es la clave
+        # de sesión de pi, para que reconectar reanude la misma sesión en vez de
+        # crear una nueva. pi valida el id con regex [A-Za-z0-9._-]; los UUID calzan.
+        pi_args =
+          case pi_session_id(conversation_id) do
+            nil -> pi_args
+            session_id -> pi_args ++ ["--session-id", session_id]
+          end
 
         pi_args =
           case fs().read(config_path) do
@@ -146,6 +156,7 @@ defmodule Soma.AgentRunner do
            port: port,
            caller: caller,
            agent_id: agent_id,
+           conversation_id: conversation_id,
            agent_info: agent_info,
            buffer: "",
            aborted: false,
@@ -528,6 +539,21 @@ defmodule Soma.AgentRunner do
     if state[:abort_sigterm_timer], do: Process.cancel_timer(state.abort_sigterm_timer)
     if state[:abort_kill_timer], do: Process.cancel_timer(state.abort_kill_timer)
   end
+
+  # Solo devuelve un session id válido para pi (regex [A-Za-z0-9._-], no vacío,
+  # empieza/termina alfanumérico). Si no cumple, se omite --session-id.
+  @doc false
+  def pi_session_id(nil), do: nil
+
+  def pi_session_id(id) when is_binary(id) do
+    if Regex.match?(~r/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/, id) do
+      id
+    else
+      nil
+    end
+  end
+
+  def pi_session_id(_), do: nil
 
   defp resolve_provider_envs(provider_mod, org_id, user_id) do
     Enum.reduce(AIProvider.supported(), {[], []}, fn provider, {vars, available} ->
