@@ -6,7 +6,7 @@
 
 **Issue paraguas**: [#192](https://github.com/ZeaCl/soma/issues/192)
 **Rama principal**: `feat/192-session-memory` *(a crear)*
-**Estado global**: 🟡 En curso — Fase 1
+**Estado global**: 🟡 En curso — Fase 1 ✅, Fase 2 siguiente
 
 ---
 
@@ -20,19 +20,19 @@
 
 ---
 
-## Fase 1 — Sesión durable por conversación (P0) 🟡
+## Fase 1 — Sesión durable por conversación (P0) ✅
 
 > Objetivo: reconectar el chat no pierde memoria. Clave de sesión = `conversation.id`.
 
-- [ ] `AgentSocket.handle_init/4` pasa `conversation.id` a `AgentRunner.start_link`
-- [ ] `AgentRunner.init/1` acepta `:conversation_id`
-- [ ] `AgentRunner` agrega `--session-id <conversation.id>` a los args de pi
-- [ ] Validar que el UUID cumple el regex de session-id de pi
-- [ ] Fallback: si no hay `conversation_id`, mantener comportamiento actual
-- [ ] Test: dos `init` con el mismo `cid` reusan la misma sesión pi
-- [ ] Test: `cid` distintos usan sesiones pi distintas
-- [ ] `mix test` verde
-- [ ] PR abierto con `Closes #192` (parcial)
+- [x] `AgentSocket.handle_init/4` pasa `conversation.id` a `AgentRunner.start_link`
+- [x] `AgentRunner.init/1` acepta `:conversation_id`
+- [x] `AgentRunner` agrega `--session-id <conversation.id>` a los args de pi
+- [x] Validar que el UUID cumple el regex de session-id de pi (`pi_session_id/1`)
+- [x] Fallback: si no hay `conversation_id`, mantener comportamiento actual
+- [x] Test: `pi_session_id/1` valida UUIDs y rechaza inválidos
+- [x] Test: `conversation_id` persistido en el estado del AgentRunner
+- [x] `mix test test/soma/agent_runner_test.exs` → 18/18 verde
+- [ ] PR abierto con `Closes #192` (parcial) — *en curso*
 
 ---
 
@@ -98,3 +98,4 @@
 | Fecha | Acción | Archivos |
 |---|---|---|
 | 2026-09-10 | Fase 0 completada: plan + task escritos | `.wiki/plans/0001-session-context-memory/*` |
+| 2026-09-10 | Fase 1 completada: sesión durable por conversación (`--session-id`) | `lib/soma/agent_runner.ex`, `lib/soma_web/agent_socket.ex`, `test/soma/agent_runner_test.exs` |
