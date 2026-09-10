@@ -233,6 +233,68 @@ defmodule Soma.AgentRunnerTest do
     AgentRunner.stop(pid)
   end
 
+  test "emits context_warning when context usage exceeds threshold" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "response",
+        command: "get_session_stats",
+        success: true,
+        data: %{
+          contextUsage: %{tokens: 170_000, contextWindow: 200_000, percent: 85}
+        }
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+
+    assert_receive {:agent_event, warning}, 500
+    assert warning["type"] == "context_warning"
+    assert warning["percent"] == 85
+    assert warning["contextWindow"] == 200_000
+
+    AgentRunner.stop(pid)
+  end
+
+  test "does not emit context_warning below threshold" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "response",
+        command: "get_session_stats",
+        success: true,
+        data: %{
+          contextUsage: %{tokens: 60_000, contextWindow: 200_000, percent: 30}
+        }
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+    refute_receive {:agent_event, %{"type" => "context_warning"}}, 200
+
+    AgentRunner.stop(pid)
+  end
+
+  test "ignores get_session_stats response without contextUsage" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "response",
+        command: "get_session_stats",
+        success: true,
+        data: %{}
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+    refute_receive {:agent_event, %{"type" => "context_warning"}}, 200
+
+    AgentRunner.stop(pid)
+  end
+
   test "accumulates text across multiple deltas" do
     pid = start_agent!()
     port = port_from(pid)
