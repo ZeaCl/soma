@@ -127,6 +127,14 @@ defmodule Soma.AgentRunner do
             [:binary, :stream, :use_stdio, :exit_status, args: args]
           )
 
+        # Habilitar auto-compaction en pi (context window management, soma#185).
+        # pi ya viene con compaction habilitada por defecto; lo enviamos explícito
+        # para que el contrato sea determinista entre versiones de pi.
+        shell().port_command(
+          port,
+          Jason.encode!(%{type: "set_auto_compaction", enabled: true}) <> "\n"
+        )
+
         send(caller, {:agent_event, %{"type" => "ready"}})
 
         # Publish AgentEvent: agent started
@@ -189,6 +197,9 @@ defmodule Soma.AgentRunner do
 
   @abort_sigterm_ms Application.compile_env(:soma, :abort_sigterm_ms, 3_000)
   @abort_kill_ms Application.compile_env(:soma, :abort_kill_ms, 5_000)
+
+  # Umbral de uso de contexto (0..1) sobre el que se emite `context_warning` (soma#185).
+  @context_warn_threshold Application.compile_env(:soma, :context_warn_threshold, 0.8)
 
   @impl true
   def handle_cast(:abort, %{aborted: true} = state), do: {:noreply, state}
@@ -335,6 +346,10 @@ defmodule Soma.AgentRunner do
 
   defp handle_jsonl(line, state) do
     case Jason.decode(line) do
+      {:ok, %{"type" => "response", "command" => "get_session_stats", "data" => data}} ->
+        maybe_warn_context(state, data)
+        state
+
       {:ok, %{"type" => "response"}} ->
         state
 
@@ -356,6 +371,41 @@ defmodule Soma.AgentRunner do
           end
 
         %{state | current_tools: new_tools}
+
+      # ── Context compaction (soma#185) ──────────────────────────────
+      # pi compacta el historial cuando el contexto se acerca al límite.
+      # Relayamos start/end al cliente para que muestre "Compactando contexto..."
+      # en vez de percibir que el agente "olvidó" la conversación.
+      {:ok, %{"type" => "compaction_start"} = event} ->
+        send(
+          state.caller,
+          {:agent_event,
+           %{"type" => "compacting", "phase" => "start", "reason" => event["reason"]}}
+        )
+
+        state
+
+      {:ok, %{"type" => "compaction_end"} = event} ->
+        result = event["result"] || %{}
+
+        compaction = %{
+          "type" => "compacting",
+          "phase" => "end",
+          "reason" => event["reason"],
+          "aborted" => event["aborted"] || false,
+          "willRetry" => event["willRetry"] || false,
+          "tokensBefore" => result["tokensBefore"],
+          "estimatedTokensAfter" => result["estimatedTokensAfter"]
+        }
+
+        compaction =
+          case event["errorMessage"] do
+            nil -> compaction
+            msg -> Map.put(compaction, "error", msg)
+          end
+
+        send(state.caller, {:agent_event, compaction})
+        state
 
       {:ok, %{"type" => "agent_end", "willRetry" => false}} ->
         if state.prompt_start do
@@ -380,6 +430,9 @@ defmodule Soma.AgentRunner do
              "final_tools" => state.current_tools
            }}
         )
+
+        # Consultar uso de contexto para emitir context_warning si corresponde.
+        request_session_stats(state)
 
         state
 
@@ -433,6 +486,43 @@ defmodule Soma.AgentRunner do
   end
 
   defp handle_delta(_, state), do: state
+
+  # ── Context usage warning (soma#185) ─────────────────────────────────
+
+  defp request_session_stats(state) do
+    shell().port_command(
+      state.port,
+      Jason.encode!(%{type: "get_session_stats"}) <> "\n"
+    )
+  rescue
+    _ -> :ok
+  end
+
+  defp maybe_warn_context(state, data) when is_map(data) do
+    case data["contextUsage"] do
+      %{"percent" => percent} when is_number(percent) ->
+        ratio = if percent > 1, do: percent / 100.0, else: percent
+
+        if ratio >= @context_warn_threshold do
+          send(
+            state.caller,
+            {:agent_event,
+             %{
+               "type" => "context_warning",
+               "percent" => round(ratio * 100),
+               "tokens" => data["contextUsage"]["tokens"],
+               "contextWindow" => data["contextUsage"]["contextWindow"],
+               "threshold" => round(@context_warn_threshold * 100)
+             }}
+          )
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp maybe_warn_context(_state, _data), do: :ok
 
   defp cancel_timers(state) do
     if state[:abort_sigterm_timer], do: Process.cancel_timer(state.abort_sigterm_timer)

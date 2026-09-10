@@ -150,6 +150,151 @@ defmodule Soma.AgentRunnerTest do
     assert_receive {:DOWN, _, :process, ^pid, _}, 1000
   end
 
+  # ── Context compaction (soma#185) ───────────────────────────────────
+
+  test "enables auto_compaction on pi via port_command on start" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    commands = Soma.Shell.Mock.port_commands()
+
+    assert Enum.any?(commands, fn {p, data} ->
+             p == port and
+               match?(
+                 %{"type" => "set_auto_compaction", "enabled" => true},
+                 Jason.decode!(data)
+               )
+           end),
+           "expected set_auto_compaction command on port"
+
+    AgentRunner.stop(pid)
+  end
+
+  test "relays compaction_start from port as compacting start" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl = Jason.encode!(%{type: "compaction_start", reason: "threshold"}) <> "\n"
+    send(pid, {port, {:data, jsonl}})
+
+    assert_receive {:agent_event,
+                    %{"type" => "compacting", "phase" => "start", "reason" => "threshold"}},
+                   500
+
+    AgentRunner.stop(pid)
+  end
+
+  test "relays compaction_end from port as compacting end with token metrics" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "compaction_end",
+        reason: "threshold",
+        result: %{tokensBefore: 150_000, estimatedTokensAfter: 32_000},
+        aborted: false,
+        willRetry: false
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+
+    assert_receive {:agent_event, compaction}, 500
+    assert compaction["type"] == "compacting"
+    assert compaction["phase"] == "end"
+    assert compaction["reason"] == "threshold"
+    assert compaction["tokensBefore"] == 150_000
+    assert compaction["estimatedTokensAfter"] == 32_000
+    refute compaction["willRetry"]
+
+    AgentRunner.stop(pid)
+  end
+
+  test "relays compaction_end error to caller" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "compaction_end",
+        reason: "overflow",
+        result: nil,
+        aborted: false,
+        willRetry: false,
+        errorMessage: "API quota exceeded"
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+
+    assert_receive {:agent_event, compaction}, 500
+    assert compaction["phase"] == "end"
+    assert compaction["error"] == "API quota exceeded"
+
+    AgentRunner.stop(pid)
+  end
+
+  test "emits context_warning when context usage exceeds threshold" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "response",
+        command: "get_session_stats",
+        success: true,
+        data: %{
+          contextUsage: %{tokens: 170_000, contextWindow: 200_000, percent: 85}
+        }
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+
+    assert_receive {:agent_event, warning}, 500
+    assert warning["type"] == "context_warning"
+    assert warning["percent"] == 85
+    assert warning["contextWindow"] == 200_000
+
+    AgentRunner.stop(pid)
+  end
+
+  test "does not emit context_warning below threshold" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "response",
+        command: "get_session_stats",
+        success: true,
+        data: %{
+          contextUsage: %{tokens: 60_000, contextWindow: 200_000, percent: 30}
+        }
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+    refute_receive {:agent_event, %{"type" => "context_warning"}}, 200
+
+    AgentRunner.stop(pid)
+  end
+
+  test "ignores get_session_stats response without contextUsage" do
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{
+        type: "response",
+        command: "get_session_stats",
+        success: true,
+        data: %{}
+      }) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+    refute_receive {:agent_event, %{"type" => "context_warning"}}, 200
+
+    AgentRunner.stop(pid)
+  end
+
   test "accumulates text across multiple deltas" do
     pid = start_agent!()
     port = port_from(pid)
