@@ -4,6 +4,16 @@ Bitácora cronológica de cambios. Formato: `## [YYYY-MM-DD] <tipo> | <descripci
 
 ---
 
+## [2026-09-10] design | Plan de sesiones y memoria multi-runtime (issue #192)
+
+- **Diagnóstico**: se identificó una segunda causa raíz de la "amnesia" del agente, distinta del context overflow: **al reconectar el WebSocket, pi arranca una sesión nueva** (`agent_socket.ex` no pasa `conversation.id`; `agent_runner.ex` no usa `--session-id`).
+- **Decisión arquitectónica**: Postgres (Soma) es la fuente de verdad; la sesión del runtime es un **caché efímero y descartable**. Clave de sesión = `conversation.id`.
+- **Contrato**: Context Bundle agnóstico de runtime, inyectado por adapters (patrón espejo de `AgentEvents.Adapters.*`).
+- **Alcance**: solo Postgres (sin Neo4j; interfaz preparada). La memoria sirve a pi, opencode, claude-code y Glia.
+- **Entregables**: `plan.md` + `task.md` en `.wiki/plans/0001-session-context-memory/`; issue paraguas [#192](https://github.com/ZeaCl/soma/issues/192).
+- **Fases**: 1) sesión durable por conversación, 2) reconstrucción desde Postgres, 3) compactación/summary (absorbe #185), 4) adapters multi-runtime.
+- **Archivos actualizados**: `.wiki/plans/0001-session-context-memory/plan.md`, `.wiki/plans/0001-session-context-memory/task.md`, `.wiki/index.md`, `.wiki/log.md`.
+
 ## [2026-08-03] fix | zea-soma files list sin flags devuelve silencio — owner_id required para org
 
 - **Issue**: #175 (zea-soma files list no encuentra archivos)

@@ -29,6 +29,14 @@
 
 ---
 
+## Planes
+
+> Planes de implementación en curso. Cada uno con su `task.md` de avance.
+
+- [0001 — Sesiones y memoria de agentes](plans/0001-session-context-memory/plan.md) 🟡 — Postgres como fuente de verdad, sesión de runtime como caché. Issue [#192](https://github.com/ZeaCl/soma/issues/192) · [task](plans/0001-session-context-memory/task.md)
+
+---
+
 ## Reglas
 
 - **[rules](rules.md)** — Convenciones y patrones descubiertos: sandbox, RPC bridge, skills, SDK, Docker, API
