@@ -55,6 +55,19 @@ defmodule SomaWeb.AgentSocketTest do
     assert Jason.decode!(json)["type"] == "delta"
   end
 
+  test "handle_info with compacting event forwards to client" do
+    state = %{agent_runner: nil}
+
+    result =
+      AgentSocket.handle_info(
+        {:agent_event, %{"type" => "compacting", "phase" => "start", "reason" => "threshold"}},
+        state
+      )
+
+    assert {:push, {:text, json}, ^state} = result
+    assert Jason.decode!(json)["type"] == "compacting"
+  end
+
   test "handle_info with unknown message is ignored" do
     state = %{agent_runner: nil}
     assert {:ok, ^state} = AgentSocket.handle_info(:unknown, state)

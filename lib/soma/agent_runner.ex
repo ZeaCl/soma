@@ -127,6 +127,14 @@ defmodule Soma.AgentRunner do
             [:binary, :stream, :use_stdio, :exit_status, args: args]
           )
 
+        # Habilitar auto-compaction en pi (context window management, soma#185).
+        # pi ya viene con compaction habilitada por defecto; lo enviamos explícito
+        # para que el contrato sea determinista entre versiones de pi.
+        shell().port_command(
+          port,
+          Jason.encode!(%{type: "set_auto_compaction", enabled: true}) <> "\n"
+        )
+
         send(caller, {:agent_event, %{"type" => "ready"}})
 
         # Publish AgentEvent: agent started
@@ -356,6 +364,41 @@ defmodule Soma.AgentRunner do
           end
 
         %{state | current_tools: new_tools}
+
+      # ── Context compaction (soma#185) ──────────────────────────────
+      # pi compacta el historial cuando el contexto se acerca al límite.
+      # Relayamos start/end al cliente para que muestre "Compactando contexto..."
+      # en vez de percibir que el agente "olvidó" la conversación.
+      {:ok, %{"type" => "compaction_start"} = event} ->
+        send(
+          state.caller,
+          {:agent_event,
+           %{"type" => "compacting", "phase" => "start", "reason" => event["reason"]}}
+        )
+
+        state
+
+      {:ok, %{"type" => "compaction_end"} = event} ->
+        result = event["result"] || %{}
+
+        compaction = %{
+          "type" => "compacting",
+          "phase" => "end",
+          "reason" => event["reason"],
+          "aborted" => event["aborted"] || false,
+          "willRetry" => event["willRetry"] || false,
+          "tokensBefore" => result["tokensBefore"],
+          "estimatedTokensAfter" => result["estimatedTokensAfter"]
+        }
+
+        compaction =
+          case event["errorMessage"] do
+            nil -> compaction
+            msg -> Map.put(compaction, "error", msg)
+          end
+
+        send(state.caller, {:agent_event, compaction})
+        state
 
       {:ok, %{"type" => "agent_end", "willRetry" => false}} ->
         if state.prompt_start do
