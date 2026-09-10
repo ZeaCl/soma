@@ -207,7 +207,15 @@ defmodule Soma.Skills do
   end
 
   def update_agent_config(agent_id, attrs) do
-    config = Map.take(attrs, ["system_prompt", "skills", "tools", "workspace_paths", "engine"])
+    config =
+      Map.take(attrs, [
+        "system_prompt",
+        "skills",
+        "cli_skills",
+        "tools",
+        "workspace_paths",
+        "engine"
+      ])
 
     case thalamus_client().update_user(agent_id, config, nil) do
       {:ok, _} ->
@@ -230,6 +238,7 @@ defmodule Soma.Skills do
         engine: attrs["engine"] || "pi",
         system_prompt: attrs["system_prompt"],
         skills: attrs["skills"] || [],
+        cli_skills: attrs["cli_skills"] || [],
         tools: attrs["tools"] || ["read", "bash", "edit", "write"],
         workspace_paths: attrs["workspace_paths"] || []
       }

@@ -34,6 +34,7 @@ defmodule SomaWeb.AgentController do
             {:ok, _uid, home} ->
               config = agent["agent_config"] || %{}
               skill_names = config["skills"] || []
+              cli_skill_names = config["cli_skills"] || []
 
               for name <- skill_names do
                 src = Path.join(["/root/.agents/skills", name])
@@ -53,6 +54,7 @@ defmodule SomaWeb.AgentController do
                 Jason.encode!(
                   %{
                     "skills" => skill_names,
+                    "cli_skills" => cli_skill_names,
                     "system_prompt" => config["system_prompt"],
                     "engine" => config["engine"] || "pi",
                     "created_at" => DateTime.to_iso8601(DateTime.utc_now())
@@ -71,6 +73,22 @@ defmodule SomaWeb.AgentController do
 
               username = Sandbox.username(agent_id)
               System.cmd("chown", ["-R", "#{username}:#{username}", Path.join([home, ".pi"])])
+
+              # Install CLI skills into the agent sandbox
+              for cli_name <- cli_skill_names do
+                case Soma.CliSkills.install_to_agent(org_id, cli_name, agent_id) do
+                  {:ok, _} ->
+                    require Logger
+                    Logger.info("CLI skill #{cli_name} installed for agent #{agent_id}")
+
+                  {:error, reason} ->
+                    require Logger
+
+                    Logger.error(
+                      "CLI skill #{cli_name} install failed for #{agent_id}: #{inspect(reason)}"
+                    )
+                end
+              end
 
             {:error, reason} ->
               require Logger

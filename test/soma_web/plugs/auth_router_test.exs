@@ -50,6 +50,11 @@ defmodule SomaWeb.AuthRouterTest do
     assert conn.status in [401, 201]
   end
 
+  test "routes /cli-skills" do
+    conn = conn(:get, "/cli-skills") |> AuthRouter.call(AuthRouter.init([]))
+    assert conn.status in [401, 200]
+  end
+
   test "unknown route returns 404" do
     conn = conn(:get, "/no-existe") |> AuthRouter.call(AuthRouter.init([]))
     assert conn.status == 404
