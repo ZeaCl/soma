@@ -48,6 +48,37 @@ defmodule Soma.AgentRunnerTest do
     :sys.get_state(pid).port
   end
 
+  # ── Sesión por conversación (#192) ───────────────────────────────────
+
+  test "pi_session_id/1 accepts UUIDs and rejects invalid ids" do
+    assert AgentRunner.pi_session_id("6f6f5a3e-1111-2222-3333-444455556666") ==
+             "6f6f5a3e-1111-2222-3333-444455556666"
+
+    assert AgentRunner.pi_session_id("dm:nutrisnaps-assistant") == nil
+    assert AgentRunner.pi_session_id("has spaces") == nil
+    assert AgentRunner.pi_session_id("-leading-dash") == nil
+    assert AgentRunner.pi_session_id("") == nil
+    assert AgentRunner.pi_session_id(nil) == nil
+  end
+
+  test "conversation_id is stored in state" do
+    conv_id = "6f6f5a3e-1111-2222-3333-444455556666"
+
+    opts = Keyword.put(default_opts(), :conversation_id, conv_id)
+    {:ok, pid} = AgentRunner.start_link(opts)
+    assert_receive {:agent_event, %{"type" => "ready"}}, 500
+
+    assert :sys.get_state(pid).conversation_id == conv_id
+
+    AgentRunner.stop(pid)
+  end
+
+  test "conversation_id defaults to nil when not provided" do
+    pid = start_agent!()
+    assert :sys.get_state(pid).conversation_id == nil
+    AgentRunner.stop(pid)
+  end
+
   # ── API ──────────────────────────────────────────────────────────────
 
   test "start_link starts a GenServer and sends ready to caller" do

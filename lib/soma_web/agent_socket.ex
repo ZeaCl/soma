@@ -188,7 +188,8 @@ defmodule SomaWeb.AgentSocket do
                agent_id: agent_id,
                token: token,
                org_id: org_id,
-               user_id: user_id
+               user_id: user_id,
+               conversation_id: conversation.id
              ) do
           {:ok, pid} ->
             new_state =
