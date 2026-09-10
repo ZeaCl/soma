@@ -24,6 +24,7 @@ defmodule SomaWeb.Router do
   forward("/api/files", to: SomaWeb.Plugs.AuthRouter)
   forward("/api/api-keys", to: SomaWeb.Plugs.AuthRouter)
   forward("/api/agents", to: SomaWeb.Plugs.AuthRouter)
+  forward("/api/cli-skills", to: SomaWeb.Plugs.AuthRouter)
   forward("/api/upload", to: SomaWeb.Plugs.AuthRouter)
 
   # Serve SPA index.html for root and any non-API path

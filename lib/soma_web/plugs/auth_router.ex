@@ -27,6 +27,12 @@ defmodule SomaWeb.Plugs.AuthRouter do
   forward("/skills", to: SomaWeb.SkillController)
   forward("/skills/:name", to: SomaWeb.SkillController)
 
+  # ── CLI Skills ──
+  forward("/cli-skills", to: SomaWeb.CliSkillController)
+  forward("/cli-skills/:name", to: SomaWeb.CliSkillController)
+  forward("/cli-skills/:name/install/:agent_id", to: SomaWeb.CliSkillController)
+  forward("/cli-skills/:name/health-check/:agent_id", to: SomaWeb.CliSkillController)
+
   # ── Agents ──
   forward("/agents", to: SomaWeb.AgentController)
   forward("/agents/:id", to: SomaWeb.AgentController)

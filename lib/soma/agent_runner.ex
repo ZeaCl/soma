@@ -9,6 +9,7 @@ defmodule Soma.AgentRunner do
   alias Soma.Sandbox
   alias Soma.AIProvider
   alias Soma.AgentEvents
+  alias Soma.CliSkills
 
   defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
   defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
@@ -76,8 +77,11 @@ defmodule Soma.AgentRunner do
         send(caller, {:agent_event, error})
         {:stop, :no_ai_provider_configured}
       else
+        # Resolve CLI skills env vars (credentials for installed CLIs)
+        cli_env_vars = CliSkills.resolve_env_vars(org_id, user_id, agent_id)
+
         api_keys =
-          [{"ZEA_TOKEN", token} | env_vars]
+          [{"ZEA_TOKEN", token} | env_vars ++ cli_env_vars]
           |> Enum.filter(fn {_, v} -> v != nil and v != "" end)
           |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
           |> Enum.join(" ")
@@ -114,8 +118,10 @@ defmodule Soma.AgentRunner do
               pi_args
           end
 
+        # Prepend ~/.local/bin to PATH so CLI skills binaries are available
         pi_cmd =
-          "cd #{home} && #{api_keys} HOME=#{home} pi " <> Enum.map_join(pi_args, " ", &inspect/1)
+          "cd #{home} && PATH=#{home}/.local/bin:$PATH #{api_keys} HOME=#{home} pi " <>
+            Enum.map_join(pi_args, " ", &inspect/1)
 
         args = ["-u", username, "bash", "-c", pi_cmd]
 
