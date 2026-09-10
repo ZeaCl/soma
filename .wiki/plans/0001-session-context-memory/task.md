@@ -32,7 +32,7 @@
 - [x] Test: `pi_session_id/1` valida UUIDs y rechaza inválidos
 - [x] Test: `conversation_id` persistido en el estado del AgentRunner
 - [x] `mix test test/soma/agent_runner_test.exs` → 18/18 verde
-- [ ] PR abierto con `Closes #192` (parcial) — *en curso*
+- [x] PR abierto: [#193](https://github.com/ZeaCl/soma/pull/193)
 
 ---
 
