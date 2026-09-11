@@ -2,13 +2,15 @@ import Config
 
 config :soma, ecto_repos: [Soma.Repo]
 
-config :soma, Soma.Repo,
-  url:
-    System.get_env(
-      "DATABASE_URL",
-      "postgresql://postgres:postgres_secure_password@postgres:5432/soma_prod"
-    ),
-  pool_size: String.to_integer(System.get_env("POOL_SIZE", "3"))
+if config_env() != :test do
+  config :soma, Soma.Repo,
+    url:
+      System.get_env(
+        "DATABASE_URL",
+        "postgresql://postgres:postgres_secure_password@postgres:5432/soma_prod"
+      ),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE", "3"))
+end
 
 config :soma, SomaWeb.Endpoint,
   server: true,
