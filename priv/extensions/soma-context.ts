@@ -33,7 +33,14 @@ export default function (api: ExtensionAPI) {
       const content = fs.readFileSync(contextPath, "utf-8");
       const bundle = JSON.parse(content);
 
-      if (!bundle || !Array.isArray(bundle.messages) || bundle.messages.length === 0) {
+      if (!bundle) {
+        return;
+      }
+
+      const hasMessages = Array.isArray(bundle.messages) && bundle.messages.length > 0;
+      const hasSummary = typeof bundle.summary === "string" && bundle.summary.trim().length > 0;
+
+      if (!hasMessages && !hasSummary) {
         return;
       }
 
@@ -48,17 +55,24 @@ export default function (api: ExtensionAPI) {
         return;
       }
 
-      // Formateamos el historial de mensajes de Soma para inyectarlo en el system prompt del agente
-      let historyText = "\n\n## Historial previo reconstruido desde Postgres (Soma autoritativo):\n";
-      for (const msg of bundle.messages) {
-        const role = msg.role === "assistant" ? "Asistente" : "Usuario";
-        historyText += `\n**[${role}]**: ${msg.content}\n`;
+      let memoryBlock = "\n\n## Memoria y contexto previos reconstruidos desde Postgres (Soma autoritativo):\n";
+
+      if (hasSummary) {
+        memoryBlock += `\n### Resumen acumulado de la conversación anterior:\n${bundle.summary.trim()}\n`;
+      }
+
+      if (hasMessages) {
+        memoryBlock += "\n### Mensajes recientes del hilo:\n";
+        for (const msg of bundle.messages) {
+          const role = msg.role === "assistant" ? "Asistente" : "Usuario";
+          memoryBlock += `\n**[${role}]**: ${msg.content}\n`;
+        }
       }
 
       contextInjected = true;
 
       return {
-        systemPrompt: event.systemPrompt + historyText,
+        systemPrompt: event.systemPrompt + memoryBlock,
       };
     } catch (err) {
       // Si hay error de parseo o lectura, continuamos silenciosamente sin romper el agente

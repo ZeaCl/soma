@@ -13,6 +13,8 @@ defmodule Soma.Conversation do
              :title,
              :last_message_at,
              :message_count,
+             :summary,
+             :summary_covers_up_to,
              :inserted_at,
              :updated_at
            ]}
@@ -28,6 +30,8 @@ defmodule Soma.Conversation do
     field(:message_count, :integer, default: 0)
     field(:is_deleted, :boolean, default: false)
     field(:deleted_at, :utc_datetime)
+    field(:summary, :string)
+    field(:summary_covers_up_to, :binary_id)
     timestamps(type: :utc_datetime)
   end
 
@@ -42,7 +46,9 @@ defmodule Soma.Conversation do
       :last_message_at,
       :message_count,
       :is_deleted,
-      :deleted_at
+      :deleted_at,
+      :summary,
+      :summary_covers_up_to
     ])
     |> validate_required([:organization_id, :user_id, :agent_id, :app_context])
   end

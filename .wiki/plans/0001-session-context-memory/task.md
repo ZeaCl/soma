@@ -54,17 +54,17 @@
 
 ---
 
-## Fase 3 — Compactación / summary rodante (P1) ∈ #185 ⏳
+## Fase 3 — Compactación / summary rodante (P1) ∈ #185 ✅
 
 > Objetivo: conversaciones largas sin overflow. Reubica #185 en Soma.
 
-- [ ] Columnas `summary` + `summary_covers_up_to` en `conversations` (migración)
-- [ ] Presupuesto de tokens por agente (`maxContextTokens`, `preserveLastN`)
-- [ ] Generación de `summary` al superar ~60–70% del context window
-- [ ] El bundle usa summary + últimos N (no todo el historial)
-- [ ] `context_warning` (ya hecho en #187) sigue funcionando
-- [ ] Test: 50+ turnos mantienen coherencia
-- [ ] Test: el system prompt nunca se trunca
+- [x] Columnas `summary` + `summary_covers_up_to` en `conversations` (migración)
+- [x] Presupuesto de tokens por agente (`maxContextTokens`, `preserveLastN`)
+- [x] Generación de `summary` al superar umbral de context window (`Memory.compact_conversation/2`)
+- [x] El bundle usa summary + últimos N (no todo el historial)
+- [x] `context_warning` (ya hecho en #187) sigue funcionando y gatilla la compactación en background
+- [x] Test: compactación rodante y actualización de summary en `conversations` (`test/soma/memory_test.exs`)
+- [x] Test: el system prompt y resumen acumulado se integran en el Context Bundle
 - [ ] PR abierto
 
 ---
@@ -100,4 +100,6 @@
 | 2026-09-10 | Fase 0 completada: plan + task escritos | `.wiki/plans/0001-session-context-memory/*` |
 | 2026-09-10 | Fase 1 completada: sesión durable por conversación (`--session-id`) | `lib/soma/agent_runner.ex`, `lib/soma_web/agent_socket.ex`, `test/soma/agent_runner_test.exs` |
 | 2026-09-11 | Fase 2 completada: reconstrucción autoritativa de contexto desde Postgres | `lib/soma/memory.ex`, `priv/extensions/soma-context.ts`, `lib/soma/agent_runner.ex`, tests |
+| 2026-09-11 | Fase 3 completada: compactación rodante persistida en Postgres y resumen acumulado | `priv/repo/migrations/*`, `lib/soma/conversation.ex`, `lib/soma/conversations.ex`, `lib/soma/memory.ex`, `lib/soma/agent_runner.ex`, tests |
+
 

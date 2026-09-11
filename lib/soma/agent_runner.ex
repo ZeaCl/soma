@@ -603,6 +603,16 @@ defmodule Soma.AgentRunner do
                "threshold" => round(@context_warn_threshold * 100)
              }}
           )
+
+          # Compactación rodante en Postgres (#192 Fase 3 / #185):
+          # Si el hilo tiene historial largo, generamos un resumen de lo anterior
+          # para mantener el working set dentro del presupuesto sin perder memoria.
+          if state[:conversation_id] do
+            conv_id = state.conversation_id
+            spawn(fn ->
+              Memory.compact_conversation(conv_id)
+            end)
+          end
         end
 
       _ ->

@@ -69,6 +69,25 @@ defmodule Soma.MemoryTest do
     assert decoded["conversationId"] == conv.id
   end
 
+  test "compact_conversation/2 generates rolling summary and updates conversation", %{conv: conv} do
+    # Agregar 15 mensajes al hilo
+    for i <- 1..15 do
+      role = if rem(i, 2) == 1, do: "user", else: "assistant"
+      Conversations.add_message(conv.id, %{role: role, content: "Mensaje turno #{i} con información importante"})
+    end
+
+    # Compactar manteniendo los últimos 5 recientes
+    assert {:ok, result} = Memory.compact_conversation(conv.id, keep_recent: 5)
+    assert is_binary(result.summary)
+    assert String.contains?(result.summary, "Resumen acumulado")
+    assert String.contains?(result.summary, "Mensaje turno 1")
+
+    # Verificar que el bundle ahora incluye el summary generado
+    {:ok, bundle} = Memory.build_context(conv.id)
+    assert bundle["summary"] == result.summary
+    assert bundle["budget"]["thresholdRatio"] == 0.65
+  end
+
   test "build_context/2 handles invalid UUID gracefully" do
     assert {:error, :invalid_conversation_id} == Memory.build_context("invalid-uuid")
   end
