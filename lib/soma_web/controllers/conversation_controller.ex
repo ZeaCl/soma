@@ -17,6 +17,15 @@ defmodule SomaWeb.ConversationController do
     json(conn, 200, ConversationView.render("index.json", %{conversations: convs}))
   end
 
+  defp get_query(conn, key) do
+    case conn.query_params do
+      %Plug.Conn.Unfetched{} -> nil
+      params -> params[key]
+    end
+  rescue
+    _ -> nil
+  end
+
   get "/:id" do
     org_id = conn.assigns[:org_id]
 
@@ -25,13 +34,33 @@ defmodule SomaWeb.ConversationController do
         json(conn, 404, %{error: "not_found"})
 
       conv ->
-        messages = Conversations.list_messages(conv.id)
+        limit = parse_int(get_query(conn, "limit"), 50) |> min(200) |> max(1)
+        before = get_query(conn, "before")
+
+        page = Conversations.list_messages_page(conv.id, limit: limit, before: before)
 
         json(
           conn,
           200,
-          ConversationView.render("show.json", %{conversation: conv, messages: messages})
+          ConversationView.render("show.json", %{
+            conversation: conv,
+            messages: page.messages,
+            pagination: %{
+              hasMore: page.has_more,
+              nextCursor: page.next_cursor,
+              limit: limit
+            }
+          })
         )
+    end
+  end
+
+  defp parse_int(nil, default), do: default
+
+  defp parse_int(value, default) do
+    case Integer.parse(to_string(value)) do
+      {n, _} -> n
+      :error -> default
     end
   end
 

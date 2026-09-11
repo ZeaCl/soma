@@ -8,9 +8,15 @@ defmodule SomaWeb.ConversationView do
     %{data: Enum.map(convs, &conversation_json/1), total: length(convs)}
   end
 
-  def render("show.json", %{conversation: conv, messages: msgs}) do
-    conversation_json(conv)
-    |> Map.put(:messages, Enum.map(msgs, &MessageView.message_json/1))
+  def render("show.json", %{conversation: conv, messages: msgs} = assigns) do
+    base =
+      conversation_json(conv)
+      |> Map.put(:messages, Enum.map(msgs, &MessageView.message_json/1))
+
+    case assigns[:pagination] do
+      nil -> base
+      pagination -> Map.put(base, :pagination, pagination)
+    end
   end
 
   @doc "Convierte un struct %Conversation{} a mapa camelCase."

@@ -95,6 +95,61 @@ defmodule Soma.Conversations do
     end
   end
 
+  @doc """
+  Lista mensajes con paginación por cursor, pensada para cargar los más
+  recientes primero y luego ir hacia atrás (scroll up).
+
+  Opciones:
+    * `:limit` — máximo de mensajes a devolver (default 50).
+    * `:before` — id del mensaje más antiguo ya cargado; devuelve los anteriores.
+
+  Devuelve `%{messages: [...], has_more: boolean, next_cursor: id | nil}` con
+  los mensajes en orden ascendente (para renderizar de arriba hacia abajo).
+  """
+  def list_messages_page(conv_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+    before_id = Keyword.get(opts, :before)
+
+    with {:ok, uuid} <- Ecto.UUID.cast(conv_id) do
+      base =
+        from(m in Message,
+          where: m.conversation_id == ^uuid,
+          order_by: [desc: m.created_at, desc: m.id],
+          limit: ^(limit + 1)
+        )
+
+      query =
+        case before_id && Ecto.UUID.cast(before_id) do
+          {:ok, cursor_id} ->
+            case Repo.get(Message, cursor_id) do
+              %Message{created_at: created_at} ->
+                from(m in base,
+                  where:
+                    m.created_at < ^created_at or
+                      (m.created_at == ^created_at and m.id < ^cursor_id)
+                )
+
+              nil ->
+                base
+            end
+
+          _ ->
+            base
+        end
+
+      fetched = Repo.all(query)
+      has_more = length(fetched) > limit
+      page = Enum.take(fetched, limit)
+      # Ascendente para renderizar arriba→abajo
+      messages = Enum.reverse(page)
+      next_cursor = if has_more and messages != [], do: hd(messages).id, else: nil
+
+      %{messages: messages, has_more: has_more, next_cursor: next_cursor}
+    else
+      :error -> %{messages: [], has_more: false, next_cursor: nil}
+    end
+  end
+
   def add_message(conv_id, attrs) do
     case Ecto.UUID.cast(conv_id) do
       {:ok, uuid} ->
