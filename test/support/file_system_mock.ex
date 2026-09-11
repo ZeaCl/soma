@@ -3,15 +3,24 @@ defmodule Soma.FileSystem.Mock do
   @behaviour Soma.FileSystem
 
   def start_link(responses \\ %{}) do
-    Agent.start_link(fn -> responses end, name: __MODULE__)
+    Agent.start_link(fn -> %{responses: responses, writes: []} end, name: __MODULE__)
   end
 
   def set_responses(responses) do
-    Agent.update(__MODULE__, fn _ -> responses end)
+    Agent.update(__MODULE__, fn state -> %{state | responses: responses} end)
+  end
+
+  def reset do
+    Agent.update(__MODULE__, fn _ -> %{responses: %{}, writes: []} end)
+  end
+
+  @doc "Devuelve los archivos escritos vía write/2 en orden inverso o cronológico."
+  def writes do
+    Agent.get(__MODULE__, fn state -> Enum.reverse(state.writes) end)
   end
 
   defp get(key, default) do
-    Agent.get(__MODULE__, fn r -> Map.get(r, key, default) end)
+    Agent.get(__MODULE__, fn state -> Map.get(state.responses, key, default) end)
   end
 
   @impl true
@@ -19,7 +28,12 @@ defmodule Soma.FileSystem.Mock do
   @impl true
   def read!(path), do: get({:read!, path}, "")
   @impl true
-  def write(_path, _content), do: :ok
+  def write(path, content) do
+    Agent.update(__MODULE__, fn state ->
+      %{state | writes: [{path, content} | state.writes]}
+    end)
+    :ok
+  end
   @impl true
   def mkdir_p(_path), do: :ok
   @impl true

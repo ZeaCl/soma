@@ -9,6 +9,7 @@ defmodule Soma.AgentRunner do
   alias Soma.Sandbox
   alias Soma.AIProvider
   alias Soma.AgentEvents
+  alias Soma.Memory
 
   defp shell, do: Application.get_env(:soma, :shell, Soma.Shell.Real)
   defp fs, do: Application.get_env(:soma, :file_system, Soma.FileSystem.Real)
@@ -95,6 +96,31 @@ defmodule Soma.AgentRunner do
             nil -> pi_args
             session_id -> pi_args ++ ["--session-id", session_id]
           end
+
+        system_prompt =
+          case fs().read(config_path) do
+            {:ok, content} ->
+              case Jason.decode(content) do
+                {:ok, %{"system_prompt" => prompt}} when is_binary(prompt) -> prompt
+                _ -> ""
+              end
+
+            _ ->
+              ""
+          end
+
+        # Reconstrucción autoritativa desde Postgres (#192 Fase 2):
+        # Si la sesión de pi no existe o se limpia, Soma reconstruye el Context Bundle
+        # y lo deja disponible en ~/.pi/agent/context/<conv_id>.json.
+        if conversation_id do
+          case Memory.build_context(conversation_id, system_prompt: system_prompt) do
+            {:ok, bundle} ->
+              Memory.write_context_file(home, conversation_id, bundle, fs())
+
+            {:error, reason} ->
+              Logger.warning("AgentRunner: failed to build context bundle for #{conversation_id}: #{inspect(reason)}")
+          end
+        end
 
         pi_args =
           case fs().read(config_path) do
@@ -577,6 +603,16 @@ defmodule Soma.AgentRunner do
                "threshold" => round(@context_warn_threshold * 100)
              }}
           )
+
+          # Compactación rodante en Postgres (#192 Fase 3 / #185):
+          # Si el hilo tiene historial largo, generamos un resumen de lo anterior
+          # para mantener el working set dentro del presupuesto sin perder memoria.
+          if state[:conversation_id] do
+            conv_id = state.conversation_id
+            spawn(fn ->
+              Memory.compact_conversation(conv_id)
+            end)
+          end
         end
 
       _ ->

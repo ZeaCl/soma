@@ -79,6 +79,36 @@ defmodule Soma.Conversations do
     end
   end
 
+  def get_by_id(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} -> Repo.get_by(Conversation, id: uuid, is_deleted: false)
+      :error -> nil
+    end
+  end
+
+  def update_summary(conv_id, summary, covers_up_to_id) do
+    case Ecto.UUID.cast(conv_id) do
+      {:ok, uuid} ->
+        attrs = %{summary: summary}
+
+        attrs =
+          case Ecto.UUID.cast(covers_up_to_id) do
+            {:ok, covers_uuid} -> Map.put(attrs, :summary_covers_up_to, covers_uuid)
+            _ -> attrs
+          end
+
+        Repo.update_all(
+          from(c in Conversation, where: c.id == ^uuid),
+          set: Map.to_list(attrs)
+        )
+
+        :ok
+
+      :error ->
+        {:error, :invalid_conversation_id}
+    end
+  end
+
   def list_messages(conv_id, limit \\ 100) do
     case Ecto.UUID.cast(conv_id) do
       {:ok, uuid} ->

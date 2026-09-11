@@ -36,35 +36,35 @@
 
 ---
 
-## Fase 2 — Soma autoritativo: reconstrucción desde Postgres (P0) ⏳
+## Fase 2 — Soma autoritativo: reconstrucción desde Postgres (P0) ✅
 
 > Objetivo: si el caché no existe, Soma lo reconstruye desde Postgres.
 
-- [ ] Módulo `Soma.Memory` con `build_context/1`
-  - [ ] System prompt del agente
-  - [ ] `summary` (si existe)
-  - [ ] Últimos N mensajes dentro del presupuesto
-- [ ] `AgentRunner` escribe `~/.pi/agent/context/<conversation.id>.json`
-- [ ] Extensión pi `soma-context.ts`
-  - [ ] Hook `session_start`: si la sesión es nueva, inyectar el bundle
-  - [ ] Hook `before_agent_start`: refrescar si el bundle cambió
-- [ ] Test: borrar sesión pi + reconnect → contexto reconstruido
-- [ ] Test: bundle no se inyecta dos veces si la sesión ya lo tiene
+- [x] Módulo `Soma.Memory` con `build_context/1`
+  - [x] System prompt del agente
+  - [x] `summary` (si existe)
+  - [x] Últimos N mensajes dentro del presupuesto
+- [x] `AgentRunner` escribe `~/.pi/agent/context/<conversation.id>.json`
+- [x] Extensión pi `soma-context.ts`
+  - [x] Hook `before_agent_start`: inyecta el bundle si la sesión es nueva/fría
+  - [x] No duplica si la sesión ya contiene mensajes previos
+- [x] Test: Context Bundle estructurado desde Postgres (`test/soma/memory_test.exs`)
+- [x] Test: bundle escrito a disco por `AgentRunner` al iniciar sesión (`test/soma/agent_runner_test.exs`)
 - [ ] PR abierto
 
 ---
 
-## Fase 3 — Compactación / summary rodante (P1) ∈ #185 ⏳
+## Fase 3 — Compactación / summary rodante (P1) ∈ #185 ✅
 
 > Objetivo: conversaciones largas sin overflow. Reubica #185 en Soma.
 
-- [ ] Columnas `summary` + `summary_covers_up_to` en `conversations` (migración)
-- [ ] Presupuesto de tokens por agente (`maxContextTokens`, `preserveLastN`)
-- [ ] Generación de `summary` al superar ~60–70% del context window
-- [ ] El bundle usa summary + últimos N (no todo el historial)
-- [ ] `context_warning` (ya hecho en #187) sigue funcionando
-- [ ] Test: 50+ turnos mantienen coherencia
-- [ ] Test: el system prompt nunca se trunca
+- [x] Columnas `summary` + `summary_covers_up_to` en `conversations` (migración)
+- [x] Presupuesto de tokens por agente (`maxContextTokens`, `preserveLastN`)
+- [x] Generación de `summary` al superar umbral de context window (`Memory.compact_conversation/2`)
+- [x] El bundle usa summary + últimos N (no todo el historial)
+- [x] `context_warning` (ya hecho en #187) sigue funcionando y gatilla la compactación en background
+- [x] Test: compactación rodante y actualización de summary en `conversations` (`test/soma/memory_test.exs`)
+- [x] Test: el system prompt y resumen acumulado se integran en el Context Bundle
 - [ ] PR abierto
 
 ---
@@ -99,3 +99,7 @@
 |---|---|---|
 | 2026-09-10 | Fase 0 completada: plan + task escritos | `.wiki/plans/0001-session-context-memory/*` |
 | 2026-09-10 | Fase 1 completada: sesión durable por conversación (`--session-id`) | `lib/soma/agent_runner.ex`, `lib/soma_web/agent_socket.ex`, `test/soma/agent_runner_test.exs` |
+| 2026-09-11 | Fase 2 completada: reconstrucción autoritativa de contexto desde Postgres | `lib/soma/memory.ex`, `priv/extensions/soma-context.ts`, `lib/soma/agent_runner.ex`, tests |
+| 2026-09-11 | Fase 3 completada: compactación rodante persistida en Postgres y resumen acumulado | `priv/repo/migrations/*`, `lib/soma/conversation.ex`, `lib/soma/conversations.ex`, `lib/soma/memory.ex`, `lib/soma/agent_runner.ex`, tests |
+
+

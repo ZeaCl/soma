@@ -9,6 +9,9 @@ defmodule Soma.AgentRunnerTest do
   @user_id "test-user-000000000001"
 
   setup do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Soma.Repo)
+    Ecto.Adapters.SQL.Sandbox.mode(Soma.Repo, {:shared, self()})
+
     Application.put_env(:soma, :shell, Soma.Shell.Mock)
     Application.put_env(:soma, :file_system, Soma.FileSystem.Mock)
     Application.put_env(:soma, :secret_provider, Soma.SecretProvider.Mock)
@@ -76,6 +79,25 @@ defmodule Soma.AgentRunnerTest do
   test "conversation_id defaults to nil when not provided" do
     pid = start_agent!()
     assert :sys.get_state(pid).conversation_id == nil
+    AgentRunner.stop(pid)
+  end
+
+  test "writes context bundle file when conversation_id is provided (#192 Fase 2)" do
+    conv_id = "6f6f5a3e-1111-2222-3333-444455556666"
+
+    opts = Keyword.put(default_opts(), :conversation_id, conv_id)
+    {:ok, pid} = AgentRunner.start_link(opts)
+    assert_receive {:agent_event, %{"type" => "ready"}}, 500
+
+    writes = Soma.FileSystem.Mock.writes()
+    expected_path = "/home/soma-test-agent-0/.pi/agent/context/#{conv_id}.json"
+    written = Enum.find(writes, fn {path, _} -> path == expected_path end)
+
+    assert written != nil
+    {_path, content} = written
+    assert {:ok, bundle} = Jason.decode(content)
+    assert bundle["conversationId"] == conv_id
+
     AgentRunner.stop(pid)
   end
 
