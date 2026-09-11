@@ -7,6 +7,7 @@ defmodule SomaWeb.ConversationViewTest do
   describe "conversation_json/1" do
     test "maps snake_case Ecto fields to camelCase" do
       now = ~U[2025-01-01T00:00:00Z]
+
       conv = %Conversation{
         id: "abc-123",
         organization_id: "org-1",
@@ -30,8 +31,32 @@ defmodule SomaWeb.ConversationViewTest do
       assert result.title == "Test conversation"
       assert result.lastMessageAt == now
       assert result.messageCount == 5
+      assert result.summary == nil
+      assert result.summaryCoversUpTo == nil
       assert result.insertedAt == now
       assert result.updatedAt == now
+    end
+
+    test "includes summary and summaryCoversUpTo when present" do
+      now = ~U[2025-01-01T00:00:00Z]
+
+      conv = %Conversation{
+        id: "abc-123",
+        organization_id: "org-1",
+        user_id: "user-1",
+        agent_id: "agent-1",
+        app_context: "chat",
+        title: "Test conversation",
+        summary: "Resumen de la conversación",
+        summary_covers_up_to: "msg-uuid-999",
+        inserted_at: now,
+        updated_at: now
+      }
+
+      result = ConversationView.conversation_json(conv)
+
+      assert result.summary == "Resumen de la conversación"
+      assert result.summaryCoversUpTo == "msg-uuid-999"
     end
 
     test "excludes snake_case keys from output" do

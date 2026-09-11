@@ -27,6 +27,8 @@ defmodule SomaWeb.ConversationView do
       title: conv.title,
       lastMessageAt: conv.last_message_at,
       messageCount: conv.message_count,
+      summary: conv.summary,
+      summaryCoversUpTo: conv.summary_covers_up_to,
       insertedAt: conv.inserted_at,
       updatedAt: conv.updated_at
     }
