@@ -117,15 +117,66 @@ defmodule Soma.Memory do
   end
 
   @doc """
+  Inyecta el Context Bundle en el entorno del runtime especificado (#192 Fase 4).
+  Runtimes: :pi, :opencode, :claude_code, :glia.
+  """
+  @spec inject_context(atom() | binary(), binary() | map() | struct(), binary(), map(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def inject_context(runtime \\ :pi, target, conv_id, bundle, opts \\ []) do
+    with {:ok, adapter} <- Soma.Memory.Adapter.for_runtime(runtime) do
+      adapter.inject_context(target, conv_id, bundle, opts)
+    end
+  end
+
+  @doc """
   Escribe el Context Bundle en el directorio de contexto del agente (`~/.pi/agent/context/<conv_id>.json`).
+  Retrocompatible con Fase 2.
   """
   @spec write_context_file(binary(), binary(), map(), module()) :: :ok | {:error, term()}
   def write_context_file(home, conv_id, bundle, fs \\ Soma.FileSystem.Real) do
-    context_dir = Path.join([home, ".pi", "agent", "context"])
+    case inject_context(:pi, home, conv_id, bundle, fs: fs) do
+      {:ok, _target} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-    with :ok <- fs.mkdir_p(context_dir) do
-      target_file = Path.join(context_dir, "#{conv_id}.json")
-      fs.write(target_file, Jason.encode!(bundle, pretty: true))
+  @doc """
+  Inspecciona el estado de la memoria/contexto de una conversación para
+  visibilidad en dashboards (ej. glia-web) o monitoreo.
+  """
+  @spec inspect_context(binary(), keyword()) :: {:ok, map()} | {:error, term()}
+  def inspect_context(conv_id, opts \\ []) when is_binary(conv_id) do
+    case Ecto.UUID.cast(conv_id) do
+      {:ok, uuid} ->
+        case Conversations.get_by_id(uuid) do
+          nil ->
+            {:error, :not_found}
+
+          conv ->
+            limit = Keyword.get(opts, :limit, 100)
+            messages = Conversations.list_messages(uuid, limit)
+
+            msgs_for_estimate =
+              Enum.map(messages, fn m ->
+                %{"content" => m.content, "thinking" => m.thinking}
+              end)
+
+            estimated_tokens = estimate_tokens("", conv.summary, msgs_for_estimate)
+
+            {:ok,
+             %{
+               conversation_id: uuid,
+               title: conv.title,
+               summary: conv.summary,
+               summary_covers_up_to: conv.summary_covers_up_to,
+               message_count: conv.message_count || length(messages),
+               estimated_tokens: estimated_tokens,
+               has_summary: not is_nil(conv.summary) and String.trim(conv.summary) != ""
+             }}
+        end
+
+      :error ->
+        {:error, :invalid_conversation_id}
     end
   end
 

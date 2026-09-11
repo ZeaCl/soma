@@ -69,15 +69,18 @@
 
 ---
 
-## Fase 4 — Adapters multi-runtime (P2) ⏳
+## Fase 4 — Adapters multi-runtime (P2) ✅
 
 > Objetivo: la memoria sirve a pi, opencode, claude-code y Glia.
 
-- [ ] Extraer `Soma.Memory.Adapters` (contrato común)
-- [ ] Adapter opencode
-- [ ] Adapter claude-code
-- [ ] Verificar Glia (`Glia.Memory.LongTerm`) contra el contrato
-- [ ] Visibilidad en `glia-web`
+- [x] Extraer `Soma.Memory.Adapter` (behaviour y contrato común)
+- [x] Adapter `Pi` (`Soma.Memory.Adapters.Pi`)
+- [x] Adapter `Opencode` (`Soma.Memory.Adapters.Opencode`)
+- [x] Adapter `ClaudeCode` (`Soma.Memory.Adapters.ClaudeCode`)
+- [x] Adapter `Glia` (`Soma.Memory.Adapters.Glia`) verificado contra `Glia.Memory.LongTerm`
+- [x] Despachador `Memory.inject_context/5` con fallback retrocompatible `Memory.write_context_file/4`
+- [x] Visibilidad en `glia-web` / dashboards: `summary` y `summaryCoversUpTo` expuestos en `ConversationView` y función de inspección `Memory.inspect_context/2`
+- [x] Tests unitarios completos en `test/soma/memory/adapters_test.exs`
 - [ ] PR abierto
 
 ---
@@ -89,7 +92,7 @@
 | D1 | `conversation.id` es la clave de sesión | ✅ Aprobado |
 | D2 | Inyección en pi por archivo, no endpoint | ✅ Aprobado |
 | D3 | Solo Postgres (sin Neo4j); interfaz preparada | ✅ Aprobado |
-| D4 | Memoria dentro de Soma primero; extraer si Glia lo pide | 🟡 Abierta |
+| D4 | Memoria dentro de Soma primero; extraer si Glia lo pide | ✅ Resuelto vía Adapters |
 
 ---
 
@@ -101,5 +104,6 @@
 | 2026-09-10 | Fase 1 completada: sesión durable por conversación (`--session-id`) | `lib/soma/agent_runner.ex`, `lib/soma_web/agent_socket.ex`, `test/soma/agent_runner_test.exs` |
 | 2026-09-11 | Fase 2 completada: reconstrucción autoritativa de contexto desde Postgres | `lib/soma/memory.ex`, `priv/extensions/soma-context.ts`, `lib/soma/agent_runner.ex`, tests |
 | 2026-09-11 | Fase 3 completada: compactación rodante persistida en Postgres y resumen acumulado | `priv/repo/migrations/*`, `lib/soma/conversation.ex`, `lib/soma/conversations.ex`, `lib/soma/memory.ex`, `lib/soma/agent_runner.ex`, tests |
+| 2026-09-11 | Fase 4 completada: adapters multi-runtime (pi, opencode, claude-code, glia) y visibilidad en glia-web | `lib/soma/memory/adapter.ex`, `lib/soma/memory/adapters/*`, `lib/soma/memory.ex`, `lib/soma_web/views/conversation_view.ex`, tests |
 
 
