@@ -164,6 +164,7 @@ defmodule Soma.AgentRunner do
            current_text: "",
            current_thinking: "",
            current_tools: [],
+           tool_calls_in_turn: 0,
            prompt_start: nil,
            thinking_start: nil,
            abort_sigterm_timer: nil,
@@ -202,6 +203,7 @@ defmodule Soma.AgentRunner do
          current_thinking: "",
          in_thinking: false,
          current_tools: [],
+         tool_calls_in_turn: 0,
          prompt_start: System.monotonic_time(:millisecond)
      }}
   end
@@ -211,6 +213,10 @@ defmodule Soma.AgentRunner do
 
   # Umbral de uso de contexto (0..1) sobre el que se emite `context_warning` (soma#185).
   @context_warn_threshold Application.compile_env(:soma, :context_warn_threshold, 0.8)
+
+  # Máximo de tool calls por turno antes de abortar (0 = sin límite). Previene
+  # loops infinitos de tool calls (soma#186).
+  @default_max_tool_calls_per_turn Application.compile_env(:soma, :max_tool_calls_per_turn, 40)
 
   @impl true
   def handle_cast(:abort, %{aborted: true} = state), do: {:noreply, state}
@@ -368,9 +374,7 @@ defmodule Soma.AgentRunner do
         handle_delta(delta, state)
 
       {:ok, %{"type" => "tool_execution_start", "toolName" => name, "args" => args}} ->
-        Soma.AgentMetrics.tool_called(state.agent_id, name)
-        send(state.caller, {:agent_event, %{"type" => "tool", "name" => name, "input" => args}})
-        %{state | current_tools: state.current_tools ++ [%{name: name, input: args}]}
+        handle_tool_start(state, name, args)
 
       {:ok, %{"type" => "tool_execution_end", "result" => %{"content" => [%{"text" => text}]}}} ->
         send(state.caller, {:agent_event, %{"type" => "tool_result", "content" => text}})
@@ -457,6 +461,53 @@ defmodule Soma.AgentRunner do
       _ ->
         state
     end
+  end
+
+  # ── Tool call guard (soma#186) ───────────────────────────────────────
+
+  defp handle_tool_start(state, name, args) do
+    Soma.AgentMetrics.tool_called(state.agent_id, name)
+
+    count = (state[:tool_calls_in_turn] || 0) + 1
+    max = max_tool_calls_per_turn()
+
+    send(state.caller, {:agent_event, %{"type" => "tool", "name" => name, "input" => args}})
+
+    new_state = %{
+      state
+      | current_tools: state.current_tools ++ [%{name: name, input: args}],
+        tool_calls_in_turn: count
+    }
+
+    if max > 0 and count > max do
+      Logger.warning(
+        "AgentRunner: agent #{state.agent_id} exceeded max tool calls per turn (#{max}); aborting turn"
+      )
+
+      send(
+        state.caller,
+        {:agent_event,
+         %{
+           "type" => "error",
+           "code" => "max_tool_calls_exceeded",
+           "message" =>
+             "Se excedió el máximo de #{max} llamadas a herramientas en un turno. " <>
+               "La tarea podría estar en un loop; intenta reformularla.",
+           "maxToolCalls" => max
+         }}
+      )
+
+      # Enviar abort + abort_bash para cortar el turno.
+      shell().port_command(state.port, Jason.encode!(%{type: "abort"}) <> "\n")
+      shell().port_command(state.port, Jason.encode!(%{type: "abort_bash"}) <> "\n")
+      %{new_state | aborted: true}
+    else
+      new_state
+    end
+  end
+
+  defp max_tool_calls_per_turn do
+    Application.get_env(:soma, :max_tool_calls_per_turn, @default_max_tool_calls_per_turn)
   end
 
   defp handle_delta(%{"type" => "text_delta", "delta" => delta}, state) do

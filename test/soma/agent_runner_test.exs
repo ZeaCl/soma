@@ -480,4 +480,81 @@ defmodule Soma.AgentRunnerTest do
 
     Process.flag(:trap_exit, old_flag)
   end
+
+  # ── Tool call guard (soma#186) ──────────────────────────────────────
+
+  test "aborts turn and emits error when max tool calls per turn exceeded" do
+    Application.put_env(:soma, :max_tool_calls_per_turn, 2)
+
+    on_exit(fn -> Application.delete_env(:soma, :max_tool_calls_per_turn) end)
+
+    pid = start_agent!()
+    port = port_from(pid)
+
+    tool = fn n ->
+      Jason.encode!(%{type: "tool_execution_start", toolName: "bash", args: "cmd #{n}"}) <> "\n"
+    end
+
+    send(pid, {port, {:data, tool.(1)}})
+    assert_receive {:agent_event, %{"type" => "tool"}}, 500
+
+    send(pid, {port, {:data, tool.(2)}})
+    assert_receive {:agent_event, %{"type" => "tool"}}, 500
+
+    # La tercera excede el límite → error estructurado + abort
+    send(pid, {port, {:data, tool.(3)}})
+
+    # El evento 'tool' se emite igual; luego llega el error.
+    assert_receive {:agent_event, %{"type" => "tool"}}, 500
+    assert_receive {:agent_event, %{"type" => "error"} = error}, 500
+    assert error["code"] == "max_tool_calls_exceeded"
+    assert error["maxToolCalls"] == 2
+
+    assert :sys.get_state(pid).aborted == true
+
+    AgentRunner.stop(pid)
+  end
+
+  test "does not abort when max tool calls is zero (unlimited)" do
+    Application.put_env(:soma, :max_tool_calls_per_turn, 0)
+
+    on_exit(fn -> Application.delete_env(:soma, :max_tool_calls_per_turn) end)
+
+    pid = start_agent!()
+    port = port_from(pid)
+
+    for n <- 1..5 do
+      jsonl =
+        Jason.encode!(%{type: "tool_execution_start", toolName: "bash", args: "cmd #{n}"}) <>
+          "\n"
+
+      send(pid, {port, {:data, jsonl}})
+      assert_receive {:agent_event, %{"type" => "tool"}}, 500
+    end
+
+    refute :sys.get_state(pid).aborted
+    AgentRunner.stop(pid)
+  end
+
+  test "resets tool call counter on each new prompt" do
+    Application.put_env(:soma, :max_tool_calls_per_turn, 2)
+
+    on_exit(fn -> Application.delete_env(:soma, :max_tool_calls_per_turn) end)
+
+    pid = start_agent!()
+    port = port_from(pid)
+
+    jsonl =
+      Jason.encode!(%{type: "tool_execution_start", toolName: "bash", args: "cmd 1"}) <> "\n"
+
+    send(pid, {port, {:data, jsonl}})
+    assert_receive {:agent_event, %{"type" => "tool"}}, 500
+
+    # Un nuevo prompt reinicia el contador
+    AgentRunner.send_prompt(pid, "otra tarea")
+    assert :sys.get_state(pid).tool_calls_in_turn == 0
+
+    AgentRunner.stop(pid)
+  end
+
 end
